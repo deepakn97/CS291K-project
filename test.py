@@ -1,26 +1,28 @@
-from layers import Transformer
 import torch
+import numpy as np
+
+from layers import Transformer
 
 def main():
     
-    src_vocab_size = 11
-    target_vocab_size = 11
-    num_layers = 6
-    seq_length= 12
+    source_vocab_size = 20
+    target_vocab_size = 20
+    num_layers = 5
+    seq_length = 10
 
+    
+    source = torch.tensor(np.random.randint(0,source_vocab_size,(3,seq_length)))
+    target = torch.tensor(np.random.randint(0,target_vocab_size,(3,seq_length)))
 
-    # let 0 be sos token and 1 be eos token
-    src = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 9, 10, 1], 
-                        [0, 2, 8, 7, 3, 4, 5, 6, 7, 2, 10, 1]])
-    target = torch.tensor([[0, 1, 7, 4, 3, 5, 9, 2, 8, 10, 9, 1], 
-                        [0, 1, 5, 6, 2, 4, 7, 6, 2, 8, 10, 1]])
+    print(f"Shape of source vector: {source.shape} \n \
+        Shape of output vector: {target.shape}")
 
-    print(src.shape,target.shape)
-    model = Transformer(embed_dim=512, src_vocab_size=src_vocab_size, 
-                        target_vocab_size=target_vocab_size, seq_length=seq_length,
-                        num_layers=num_layers, expansion_factor=4, n_heads=8)
+    model = Transformer(embed_dim=512, src_vocab_size=source_vocab_size, 
+                        trg_vocab_size=target_vocab_size, seq_length=seq_length,
+                        num_layers_enc=num_layers, num_layers_dec=num_layers
+                        hidden_size=248, n_heads=8, enc_dropout=0.2, dec_drouput=0.2)
     model
 
 if __name__ == "__main__":
 
-    main
+    main()
