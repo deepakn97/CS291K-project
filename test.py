@@ -19,9 +19,11 @@ def main():
 
     model = Transformer(embed_dim=512, src_vocab_size=source_vocab_size, 
                         trg_vocab_size=target_vocab_size, seq_length=seq_length,
-                        num_layers_enc=num_layers, num_layers_dec=num_layers
+                        num_layers_enc=num_layers, num_layers_dec=num_layers,
                         hidden_size=248, n_heads=8, enc_dropout=0.2, dec_drouput=0.2)
-    model
+    
+    print("Model loaded")
+    print(model)
 
 if __name__ == "__main__":
 
