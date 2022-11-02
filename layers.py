@@ -224,7 +224,7 @@ class PositionalEmbedding(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-  def __init__(self, embed_dim, hidden_size=248, n_heads=8, dropout=0.2):
+  def __init__(self, embed_dim, hidden_size=2048, n_heads=8, dropout=0.2):
     super(DecoderBlock, self).__init__()
     """
     Converts the internal embeddings to ouput embeddings
