@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from layers import Transformer
+from models import Transformer
 
 def main():
     
@@ -20,7 +20,7 @@ def main():
     model = Transformer(embed_dim=512, src_vocab_size=source_vocab_size, 
                         trg_vocab_size=target_vocab_size, seq_length=seq_length,
                         num_layers_enc=num_layers, num_layers_dec=num_layers,
-                        hidden_size=248, n_heads=8, enc_dropout=0.2, dec_drouput=0.2)
+                        hidden_size=248, n_head=8, enc_dropout=0.2, dec_dropout=0.2)
     
     print("Model loaded")
     print(model)
