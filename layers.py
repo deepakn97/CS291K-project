@@ -14,12 +14,11 @@ class MultiHeadAttention(nn.Module):
   '''
   def __init__(self, embed_dim=512, n_head=8) -> None:
     """
-    Args:
-      embed_dim: dimension of the word embeddings vector
-      n_heads: number of self-attention heads
+    :param embed_dim: dimension of the word embeddings vector
+    :param n_heads: number of self-attention heads
     """
     #TODO(deepakn97): consider adding dropout, bias for input and output, and bias for key and value weights
-    super(MultiHeadAttention).__init__()
+    super(MultiHeadAttention, self).__init__()
 
     # Assign default parameters as class parameters
     self.embed_dim = embed_dim
@@ -36,14 +35,12 @@ class MultiHeadAttention(nn.Module):
   def forward(self, key, query, value, mask=None):
     # dimensions = batch_size x seq_len x embed_dim
     """
-    Args:
-      key: key vector
-      query: query vector
-      value: value vector
-      mask: for masked attention in decoder
+    :param key: key vector
+    :param query: query vector
+    :param value: value vector
+    :param mask: for masked attention in decoder
 
-    Returns:
-      output vector from multihead attention
+    :return: output vector from multihead attention
     """
 
     batch_size = key.size(0)
@@ -90,3 +87,81 @@ class MultiHeadAttention(nn.Module):
     output = self.out(concat) # (batch_size, n_head, seq_length)
 
     return output
+  
+class TransformerBlock(nn.Module):
+  def __init__(self, embed_dim, hidden_size=2048, n_head=8, dropout=0.2):
+    """
+    :param embed_dim: dimension of embeddings
+    :param hidden_size: hidden layer dimension for feed forward layer
+    :param n_head: number of multihead attention heads
+    :param dropout: dropout value
+
+    :return out: output of the encoder
+    """
+    super(TransformerBlock, self).__init__()
+
+    self.attention = MultiHeadAttention(embed_dim, n_head)
+
+    self.layer_norm1 = nn.LayerNorm(embed_dim)
+    self.layer_norm2 = nn.LayerNorm(embed_dim)
+    
+    self.feed_forward = nn.Sequential(
+      nn.Linear(embed_dim, hidden_size)
+      nn.ReLU(),
+      nn.Linear(hidden_size, embed_dim),
+    )
+
+    self.dropout1 = nn.Dropout(dropout)
+    self.dropout2 = nn.Dropout(dropout)
+
+    def forward(self, key, query, value):
+      """
+      :param key: key vector
+      :param query: query vector
+      :param value: value vector
+      :param norm2_out: output of transformer block
+      """
+
+      attention_output = self.attention(key, query, value)
+      # add residual connection here
+      attention_residual_output = attention_output + value
+      
+      layer_norm1_output = self.dropout1(self.layer_norm1(attention_residual_output))
+      
+      feed_forward_output = self.feed_forward(layer_norm1_out)
+      # add residual connection here
+      feed_forward_residual_output = feed_forward_output + layer_norm1_output
+
+      layer_norm2_out = self.dropout2(self.layer_norm2(feed_forward_residual_output))
+
+      return layer_norm2_out
+    
+class TransformerEncoder(nn.Module):
+  def __init__(self, seq_length, vocab_size, embed_dim, num_layers, hidden_size, n_head, dropout) -> None:
+    """
+    :param seq_length: input sequence length
+    :param vocab_size: size of the vocabulary
+    :param embed_dim: dimension of embeddings
+    :param num_layers: number of encoder layers
+    :param hidden_size: hidden layer dimension for feed forward layer
+    :param n_head: number of multihead attention heads
+    :param dropout: dropout for encoder layers
+
+    :return out: output of the encoder
+    """
+    super(TransformerEncoder, self).__init__()
+    self.embedding_layer = Embedding(vocab_size, embed_dim)
+    self.positional_encoder = PositionalEmbedding(seq_length, embed_dim)
+
+    self.enc_layers = nn.ModuleList([TransformerBlock(embed_dim, hidden_size, n_head, dropout) for i in range(num_layers)])
+
+  def forward(self, x):
+    embedded_input = self.embedding_layer(x)
+    embedded_input = self.positional_encoder(embedded_input)
+    for layer in self.layers:
+      out = layer(embedded_input, embedded_input, embedded_input)
+    
+    return out
+
+
+
