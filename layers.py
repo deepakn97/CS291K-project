@@ -87,7 +87,7 @@ class MultiHeadAttention(nn.Module):
     output = self.out(concat) # (batch_size, n_head, seq_length)
 
     return output
-  
+    
 class TransformerBlock(nn.Module):
   def __init__(self, embed_dim, hidden_size=2048, n_head=8, dropout=0.2):
     """
@@ -163,5 +163,134 @@ class TransformerEncoder(nn.Module):
     
     return out
 
+class Embedding(nn.Module):
+    def __init__(self, vocab_size, embed_dim):
+        """
+        Word embedding. Represents each word in the sentence as an embedding vector.
+        :param  vocab_size: size of the vocabulary
+        :param  embed_dim:  embedding dimentiosn 
+        """
+        super(Embedding, self).__init__()
+        self.embed = nn.Embedding(vocab_size, embed_dim)
+
+    def forward(self, x):
+        """
+        Forward pass
+        :param  x:  Input vector to embed
+        :return:    Embedding
+        """
+        out = self.embed(x)
+        return out
 
 
+class PositionalEmbedding(nn.Module):
+  def __init__(self,max_len,embed_dim):
+      """
+      Introduces information to the moodel about the relative or 
+      absolute position of the tokens in the sequence
+      :param  max_len:    Max Sequence Length
+      :param  embed_dim:  Embedding dimension
+      """
+      super(PositionalEmbedding, self).__init__()
+      self.embed_dim = embed_dim
+
+      embedding = torch.zeros(max_len,self.embed_dim)
+      for pos in range(max_len):
+          for i in range(0,self.embed_dim,2):
+              embedding[pos, i] = \
+                  math.sin(pos / (10000 ** ((2 * i)/self.embed_dim)))
+              embedding[pos, i + 1] = \
+                  math.cos(pos / (10000 ** ((2 * (i + 1))/self.embed_dim)))
+      
+      embedding = embedding.unsqueeze(0)
+      self.register_buffer('positional_embedding', embedding)
+
+
+  def forward(self, x):
+      """
+      :param  x:  Input vector
+      :return:    Embedding
+      """
+
+      # make embeddings larger
+      x = x * math.sqrt(self.embed_dim)
+
+      #add constant to embedding
+      seq_len = x.size(1)
+      x = x + torch.autograd.Variable(
+          self.positional_embedding[:,:seq_len], requires_grad=False
+          )
+      return x
+
+
+class DecoderBlock(nn.Module):
+  def __init__(self, embed_dim, hidden_size=248, n_heads=8, dropout=0.2):
+    super(DecoderBlock, self).__init__()
+    """
+    Converts the internal embeddings to ouput embeddings
+    :param  embed_dim:    embedding dimension
+    :param  hidden_size:  hidden size in the decoder
+    :param  n_heads:      number of attention heads
+    :param  dropout:      drouput value
+    """
+    
+    self.attention = MultiHeadAttention(embed_dim, n_head=n_heads)
+    self.norm = nn.LayerNorm(embed_dim)
+    self.dropout = nn.Dropout(dropout)
+    self.transformer_block = TransformerBlock(embed_dim, hidden_size, n_heads, dropout)
+
+    def forward(self, key, query, x, mask):
+      """
+      :param  key:    key vector 
+      :param  query:  query vector
+      :param  x:      value vector
+      :param  mask:   mask for multi-head attention
+      :return:        block transformer output
+      """
+      attention = self.attention(x,x,x,mask=mask) #32x10x512
+      value = self.dropout(self.norm(attention + x))
+        
+      out = self.transformer_block(key, query, value)
+      return out
+
+
+class TransformerDecoder(nn.Module):
+    def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=2, hidden_size=248, n_heads=8, dropout=0.2):
+        super(TransformerDecoder, self).__init__()
+        """  
+        Transforms the code 
+        :param  target_vocab_size:  target vocabulary size
+        :param  embed_dim:          embedding dimension
+        :param  seq_len:            input sequence length
+        :param  num_layers:         number of encoder layers
+        :param  hidden_size:        hidden size in the decoder
+        :param  n_heads:            number of heads for multihead attention
+        :param  droupout:           drouput value
+        """
+
+        self.word_embedding = nn.Embedding(target_vocab_size, embed_dim)
+        self.position_embedding = PositionalEmbedding(seq_len, embed_dim)
+
+        self.layers = nn.ModuleList(
+            [DecoderBlock(embed_dim, hidden_size, n_heads) for _ in range(num_layers)]
+        )
+        self.fully_connected_out = nn.Linear(embed_dim, target_vocab_size)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, enc_out, mask):
+        """
+        :param  x:        Input vector from target  
+        :param  enc_out:  Output from encoder layer
+        :param  mask:     Mask for self-attention
+        :return:          Output vector
+        """
+        x = self.word_embedding(x)  #32x10x512
+        x = self.position_embedding(x) #32x10x512
+        x = self.dropout(x)
+     
+        for layer in self.layers:
+            x = layer(enc_out, x, enc_out, mask) 
+
+        out = F.softmax(self.fully_connected_out(x))
+
+        return out
