@@ -20,11 +20,20 @@ def main():
     model = Transformer(embed_dim=512, src_vocab_size=source_vocab_size, 
                         trg_vocab_size=target_vocab_size, seq_length=seq_length,
                         num_layers_enc=num_layers, num_layers_dec=num_layers,
-                        hidden_size=248, n_head=8, enc_dropout=0.2, dec_dropout=0.2)
+                        hidden_size=2048, n_head=8, enc_dropout=0.2, dec_dropout=0.2, max_seq_length=10)
     
     print("Model loaded")
     print(model)
 
-if __name__ == "__main__":
+    out = model(source, target)
+    print(out.shape)
 
+    # inference test
+    source = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 1]])
+    target = torch.tensor([[0]])
+    print(source.shape, target.shape)
+    out = model.decode(source, target)
+    print(out)
+
+if __name__ == "__main__":
     main()

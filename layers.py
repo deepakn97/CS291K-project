@@ -76,9 +76,9 @@ class MultiHeadAttention(nn.Module):
     product = product / math.sqrt(self.embed_dim_single_head)
 
     # apply softmax
-    scores = F.softmax(product, dim=-1)
+    scores = F.softmax(product, dim=-1) 
 
-    # multiple with value matrix
+    # multiply with value matrix
     scores = torch.matmul(scores, V) # (batch_size, n_head, seq_length, embed_per_head)
 
     # concatenate outputs
@@ -153,7 +153,7 @@ class TransformerEncoder(nn.Module):
     self.embedding_layer = Embedding(vocab_size, embed_dim)
     self.positional_encoder = PositionalEmbedding(seq_length, embed_dim)
 
-    self.enc_layers = nn.ModuleList([TransformerBlock(embed_dim, hidden_size, n_head, dropout) for i in range(num_layers)])
+    self.layers = nn.ModuleList([TransformerBlock(embed_dim, hidden_size, n_head, dropout) for i in range(num_layers)])
 
   def forward(self, x):
     embedded_input = self.embedding_layer(x)
