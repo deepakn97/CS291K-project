@@ -114,7 +114,7 @@ class TransformerBlock(nn.Module):
     self.dropout1 = nn.Dropout(dropout)
     self.dropout2 = nn.Dropout(dropout)
 
-  def forward(self, key, query, value):
+  def forward(self, key, query, value, mask=None):
     """
     :param key: key vector
     :param query: query vector
@@ -122,7 +122,9 @@ class TransformerBlock(nn.Module):
     :param norm2_out: output of transformer block
     """
 
-    attention_output = self.attention(key, query, value)
+    # mask here is used to mask the padded tokens
+    attention_output = self.attention(key, query, value, mask)
+
     # add residual connection here
     attention_residual_output = attention_output + value
     
@@ -155,11 +157,11 @@ class TransformerEncoder(nn.Module):
 
     self.layers = nn.ModuleList([TransformerBlock(embed_dim, hidden_size, n_head, dropout) for i in range(num_layers)])
 
-  def forward(self, x):
+  def forward(self, x, mask=None):
     embedded_input = self.embedding_layer(x)
     embedded_input = self.positional_encoder(embedded_input)
     for layer in self.layers:
-      out = layer(embedded_input, embedded_input, embedded_input)
+      out = layer(embedded_input, embedded_input, embedded_input, mask)
     
     return out
 
@@ -239,7 +241,7 @@ class DecoderBlock(nn.Module):
     self.dropout = nn.Dropout(dropout)
     self.transformer_block = TransformerBlock(embed_dim, hidden_size, n_head, dropout)
 
-  def forward(self, key, query, x, mask):
+  def forward(self, key, query, value, source_mask, target_mask):
     """
     :param  key:    key vector 
     :param  query:  query vector
@@ -247,15 +249,15 @@ class DecoderBlock(nn.Module):
     :param  mask:   mask for multi-head attention
     :return:        block transformer output
     """
-    attention = self.attention(x,x,x,mask=mask) #32x10x512
-    value = self.dropout(self.norm(attention + x))
+    attention = self.attention(key, query, value, mask=target_mask) #32x10x512
+    value = self.dropout(self.norm(attention + value))
       
-    out = self.transformer_block(key, query, value)
+    out = self.transformer_block(key, query, value, source_mask)
     return out
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=2, hidden_size=248, n_head=8, dropout=0.2):
+    def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=2, hidden_size=2048, n_head=8, dropout=0.2):
         super(TransformerDecoder, self).__init__()
         """  
         Transforms the code 
@@ -277,19 +279,20 @@ class TransformerDecoder(nn.Module):
         self.fully_connected_out = nn.Linear(embed_dim, target_vocab_size)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, enc_out, mask):
+    def forward(self, x, enc_out, source_mask, target_mask):
         """
-        :param  x:        Input vector from target  
-        :param  enc_out:  Output from encoder layer
-        :param  mask:     Mask for self-attention
-        :return:          Output vector
+        :param  x:          Input vector from target  
+        :param  enc_out:    Output from encoder layer
+        :param source_mask: Padding mask for source sequence
+        :param target_mask: Padding and subsequent mask for target sequence
+        :return:            Output vector
         """
         x = self.word_embedding(x)  #32x10x512
         x = self.position_embedding(x) #32x10x512
         x = self.dropout(x)
      
         for layer in self.layers:
-            x = layer(enc_out, x, enc_out, mask) 
+            x = layer(enc_out, x, enc_out, source_mask, target_mask) 
 
         out = F.softmax(self.fully_connected_out(x))
 
