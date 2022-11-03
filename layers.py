@@ -239,19 +239,19 @@ class DecoderBlock(nn.Module):
     self.dropout = nn.Dropout(dropout)
     self.transformer_block = TransformerBlock(embed_dim, hidden_size, n_head, dropout)
 
-    def forward(self, key, query, x, mask):
-      """
-      :param  key:    key vector 
-      :param  query:  query vector
-      :param  x:      value vector
-      :param  mask:   mask for multi-head attention
-      :return:        block transformer output
-      """
-      attention = self.attention(x,x,x,mask=mask) #32x10x512
-      value = self.dropout(self.norm(attention + x))
-        
-      out = self.transformer_block(key, query, value)
-      return out
+  def forward(self, key, query, x, mask):
+    """
+    :param  key:    key vector 
+    :param  query:  query vector
+    :param  x:      value vector
+    :param  mask:   mask for multi-head attention
+    :return:        block transformer output
+    """
+    attention = self.attention(x,x,x,mask=mask) #32x10x512
+    value = self.dropout(self.norm(attention + x))
+      
+    out = self.transformer_block(key, query, value)
+    return out
 
 
 class TransformerDecoder(nn.Module):
