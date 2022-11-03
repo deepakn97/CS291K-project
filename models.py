@@ -18,6 +18,7 @@ class Transformer(nn.Module):
     :param n_head: number of heads for Multi Head Attention
     :param enc_dropout: dropout for encoder layer
     :param dec_dropout: dropout for decoder layer
+    :param max_seq_length: maximum output sequence length
     """
     super(Transformer, self).__init__()
 
@@ -25,6 +26,11 @@ class Transformer(nn.Module):
     self.max_seq_length = max_seq_length
     self.encoder = TransformerEncoder(seq_length, src_vocab_size, embed_dim, num_layers_enc, hidden_size, n_head, enc_dropout)
     self.decoder = TransformerDecoder(trg_vocab_size, embed_dim, seq_length, num_layers_dec, hidden_size, n_head, dec_dropout)
+
+    # Inititalize parameters with Glorot / fan_avg
+    for p in self.parameters():
+      if p.dim() > 1:
+        nn.init.xavier_uniform_(p)
 
   def create_target_mask(self, target):
     """
@@ -53,11 +59,11 @@ class Transformer(nn.Module):
     out = target
     #TODO(deepakn97): check for <eos> token and end early
     for i in range(self.max_seq_length):
-      out = self.decoder(out, enc_out, target_mask)
+      out = self.decoder(out, enc_out, target_mask) # batch_size x seq_length x vocab_size
       out = out[:, -1, :]
       out = out.argmax(-1)
       out_labels.append(out.item())
-      out = torch.unsqueeze(out, axis=0)
+      out = torch.unsqueeze(out, axis=0) 
 
     return out_labels
   
@@ -69,7 +75,7 @@ class Transformer(nn.Module):
     :return out: final vector which returns probabilites of each target word
     """
     target_mask = self.create_target_mask(target)
-    encoder_out = self.encoder(src)
+    encoder_out = self.encoder(source)
     
     outputs = self.decoder(target, encoder_out, target_mask)
     return outputs

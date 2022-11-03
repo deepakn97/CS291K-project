@@ -50,9 +50,9 @@ class MultiHeadAttention(nn.Module):
     query_seq_length = query.size(1)
 
     # Change dims from (batch_size, seq_len, embed_dim) to (batch_size, seq_len, n_head, embed_per_head)
-    key = key.view(batch_size, seq_length, self.n_heads, self.embed_dim_single_head)
-    query = query.view(batch_size, query_seq_length, self.n_heads, self.embed_dim_single_head)
-    value = value.view(batch_size, seq_length, self.n_heads, self.embed_dim_single_head)
+    key = key.view(batch_size, seq_length, self.n_head, self.embed_dim_single_head)
+    query = query.view(batch_size, query_seq_length, self.n_head, self.embed_dim_single_head)
+    value = value.view(batch_size, seq_length, self.n_head, self.embed_dim_single_head)
 
     # Multiply the inputs with corresponding weight matrices to get final key, value and query
     
@@ -70,16 +70,16 @@ class MultiHeadAttention(nn.Module):
 
     # add mask for decoder -> fill with arbitrary small number instead of zero to avoid zero division
     if mask is not None:
-      product = product.maksed_fill(mask == 0, -1e10)
+      product = product.masked_fill(mask == 0, -1e10)
 
     # scaling by 1/sqrt(dk) to improve gradient propogation
     product = product / math.sqrt(self.embed_dim_single_head)
 
     # apply softmax
-    scores = F.softmax(product, dim=-1)
+    scores = F.softmax(product, dim=-1) 
 
-    # multiple with value matrix
-    scores = torch.matmul(scores, v) # (batch_size, n_head, seq_length, embed_per_head)
+    # multiply with value matrix
+    scores = torch.matmul(scores, V) # (batch_size, n_head, seq_length, embed_per_head)
 
     # concatenate outputs
     concat = scores.transpose(1, 2).contiguous().view(batch_size, query_seq_length, self.embed_dim)
@@ -114,27 +114,27 @@ class TransformerBlock(nn.Module):
     self.dropout1 = nn.Dropout(dropout)
     self.dropout2 = nn.Dropout(dropout)
 
-    def forward(self, key, query, value):
-      """
-      :param key: key vector
-      :param query: query vector
-      :param value: value vector
-      :param norm2_out: output of transformer block
-      """
+  def forward(self, key, query, value):
+    """
+    :param key: key vector
+    :param query: query vector
+    :param value: value vector
+    :param norm2_out: output of transformer block
+    """
 
-      attention_output = self.attention(key, query, value)
-      # add residual connection here
-      attention_residual_output = attention_output + value
-      
-      layer_norm1_output = self.dropout1(self.layer_norm1(attention_residual_output))
-      
-      feed_forward_output = self.feed_forward(layer_norm1_out)
-      # add residual connection here
-      feed_forward_residual_output = feed_forward_output + layer_norm1_output
+    attention_output = self.attention(key, query, value)
+    # add residual connection here
+    attention_residual_output = attention_output + value
+    
+    layer_norm1_output = self.dropout1(self.layer_norm1(attention_residual_output))
+    
+    feed_forward_output = self.feed_forward(layer_norm1_output)
+    # add residual connection here
+    feed_forward_residual_output = feed_forward_output + layer_norm1_output
 
-      layer_norm2_out = self.dropout2(self.layer_norm2(feed_forward_residual_output))
+    layer_norm2_out = self.dropout2(self.layer_norm2(feed_forward_residual_output))
 
-      return layer_norm2_out
+    return layer_norm2_out
     
 class TransformerEncoder(nn.Module):
   def __init__(self, seq_length, vocab_size, embed_dim, num_layers, hidden_size, n_head, dropout) -> None:
@@ -153,7 +153,7 @@ class TransformerEncoder(nn.Module):
     self.embedding_layer = Embedding(vocab_size, embed_dim)
     self.positional_encoder = PositionalEmbedding(seq_length, embed_dim)
 
-    self.enc_layers = nn.ModuleList([TransformerBlock(embed_dim, hidden_size, n_head, dropout) for i in range(num_layers)])
+    self.layers = nn.ModuleList([TransformerBlock(embed_dim, hidden_size, n_head, dropout) for i in range(num_layers)])
 
   def forward(self, x):
     embedded_input = self.embedding_layer(x)
@@ -239,19 +239,19 @@ class DecoderBlock(nn.Module):
     self.dropout = nn.Dropout(dropout)
     self.transformer_block = TransformerBlock(embed_dim, hidden_size, n_heads, dropout)
 
-    def forward(self, key, query, x, mask):
-      """
-      :param  key:    key vector 
-      :param  query:  query vector
-      :param  x:      value vector
-      :param  mask:   mask for multi-head attention
-      :return:        block transformer output
-      """
-      attention = self.attention(x,x,x,mask=mask) #32x10x512
-      value = self.dropout(self.norm(attention + x))
-        
-      out = self.transformer_block(key, query, value)
-      return out
+  def forward(self, key, query, x, mask):
+    """
+    :param  key:    key vector 
+    :param  query:  query vector
+    :param  x:      value vector
+    :param  mask:   mask for multi-head attention
+    :return:        block transformer output
+    """
+    attention = self.attention(x,x,x,mask=mask) #32x10x512
+    value = self.dropout(self.norm(attention + x))
+      
+    out = self.transformer_block(key, query, value)
+    return out
 
 
 class TransformerDecoder(nn.Module):
