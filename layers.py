@@ -158,7 +158,7 @@ class TransformerEncoder(nn.Module):
   def forward(self, x):
     embedded_input = self.embedding_layer(x)
     embedded_input = self.positional_encoder(embedded_input)
-    for layer in self.enc_layers:
+    for layer in self.layers:
       out = layer(embedded_input, embedded_input, embedded_input)
     
     return out

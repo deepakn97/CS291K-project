@@ -32,17 +32,6 @@ class Transformer(nn.Module):
       if p.dim() > 1:
         nn.init.xavier_uniform_(p)
 
-  def create_target_mask(self, target):
-    """
-    :param target: target sequence
-    :return target_mask: target_mask
-    """
-    batch_size, target_length = target.shape
-
-    target_mask = torch.tril(torch.ones((target_length, target_length))).expand(batch_size, 1, target_length, target_length)
-
-    return target_mask
-
   # Only use this function while training
   def decode(self, source, target):
     """
