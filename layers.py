@@ -114,27 +114,27 @@ class TransformerBlock(nn.Module):
     self.dropout1 = nn.Dropout(dropout)
     self.dropout2 = nn.Dropout(dropout)
 
-    def forward(self, key, query, value):
-      """
-      :param key: key vector
-      :param query: query vector
-      :param value: value vector
-      :param norm2_out: output of transformer block
-      """
+  def forward(self, key, query, value):
+    """
+    :param key: key vector
+    :param query: query vector
+    :param value: value vector
+    :param norm2_out: output of transformer block
+    """
 
-      attention_output = self.attention(key, query, value)
-      # add residual connection here
-      attention_residual_output = attention_output + value
-      
-      layer_norm1_output = self.dropout1(self.layer_norm1(attention_residual_output))
-      
-      feed_forward_output = self.feed_forward(layer_norm1_out)
-      # add residual connection here
-      feed_forward_residual_output = feed_forward_output + layer_norm1_output
+    attention_output = self.attention(key, query, value)
+    # add residual connection here
+    attention_residual_output = attention_output + value
+    
+    layer_norm1_output = self.dropout1(self.layer_norm1(attention_residual_output))
+    
+    feed_forward_output = self.feed_forward(layer_norm1_output)
+    # add residual connection here
+    feed_forward_residual_output = feed_forward_output + layer_norm1_output
 
-      layer_norm2_out = self.dropout2(self.layer_norm2(feed_forward_residual_output))
+    layer_norm2_out = self.dropout2(self.layer_norm2(feed_forward_residual_output))
 
-      return layer_norm2_out
+    return layer_norm2_out
     
 class TransformerEncoder(nn.Module):
   def __init__(self, seq_length, vocab_size, embed_dim, num_layers, hidden_size, n_head, dropout) -> None:
