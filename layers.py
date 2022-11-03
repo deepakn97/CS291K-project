@@ -15,7 +15,7 @@ class MultiHeadAttention(nn.Module):
   def __init__(self, embed_dim=512, n_head=8) -> None:
     """
     :param embed_dim: dimension of the word embeddings vector
-    :param n_heads: number of self-attention heads
+    :param n_head: number of self-attention heads
     """
     #TODO(deepakn97): consider adding dropout, bias for input and output, and bias for key and value weights
     super(MultiHeadAttention, self).__init__()
@@ -158,7 +158,7 @@ class TransformerEncoder(nn.Module):
   def forward(self, x):
     embedded_input = self.embedding_layer(x)
     embedded_input = self.positional_encoder(embedded_input)
-    for layer in self.layers:
+    for layer in self.enc_layers:
       out = layer(embedded_input, embedded_input, embedded_input)
     
     return out
@@ -224,20 +224,20 @@ class PositionalEmbedding(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-  def __init__(self, embed_dim, hidden_size=2048, n_heads=8, dropout=0.2):
+  def __init__(self, embed_dim, hidden_size=2048, n_head=8, dropout=0.2):
     super(DecoderBlock, self).__init__()
     """
     Converts the internal embeddings to ouput embeddings
     :param  embed_dim:    embedding dimension
     :param  hidden_size:  hidden size in the decoder
-    :param  n_heads:      number of attention heads
+    :param  n_head:      number of attention heads
     :param  dropout:      drouput value
     """
     
-    self.attention = MultiHeadAttention(embed_dim, n_head=n_heads)
+    self.attention = MultiHeadAttention(embed_dim, n_head=n_head)
     self.norm = nn.LayerNorm(embed_dim)
     self.dropout = nn.Dropout(dropout)
-    self.transformer_block = TransformerBlock(embed_dim, hidden_size, n_heads, dropout)
+    self.transformer_block = TransformerBlock(embed_dim, hidden_size, n_head, dropout)
 
   def forward(self, key, query, x, mask):
     """
@@ -255,7 +255,7 @@ class DecoderBlock(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=2, hidden_size=248, n_heads=8, dropout=0.2):
+    def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=2, hidden_size=248, n_head=8, dropout=0.2):
         super(TransformerDecoder, self).__init__()
         """  
         Transforms the code 
@@ -264,7 +264,7 @@ class TransformerDecoder(nn.Module):
         :param  seq_len:            input sequence length
         :param  num_layers:         number of encoder layers
         :param  hidden_size:        hidden size in the decoder
-        :param  n_heads:            number of heads for multihead attention
+        :param  n_head:            number of heads for multihead attention
         :param  droupout:           drouput value
         """
 
@@ -272,7 +272,7 @@ class TransformerDecoder(nn.Module):
         self.position_embedding = PositionalEmbedding(seq_len, embed_dim)
 
         self.layers = nn.ModuleList(
-            [DecoderBlock(embed_dim, hidden_size, n_heads) for _ in range(num_layers)]
+            [DecoderBlock(embed_dim, hidden_size, n_head) for _ in range(num_layers)]
         )
         self.fully_connected_out = nn.Linear(embed_dim, target_vocab_size)
         self.dropout = nn.Dropout(dropout)
