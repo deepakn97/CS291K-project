@@ -70,7 +70,7 @@ class MultiHeadAttention(nn.Module):
 
     # add mask for decoder -> fill with arbitrary small number instead of zero to avoid zero division
     if mask is not None:
-      product = product.maksed_fill(mask == 0, -1e10)
+      product = product.masked_fill(mask == 0, -1e10)
 
     # scaling by 1/sqrt(dk) to improve gradient propogation
     product = product / math.sqrt(self.embed_dim_single_head)
