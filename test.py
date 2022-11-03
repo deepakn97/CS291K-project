@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from utils import create_mask
 
 from models import Transformer
 
@@ -11,8 +12,10 @@ def main():
     seq_length = 10
 
     
-    source = torch.tensor(np.random.randint(0,source_vocab_size,(3,seq_length)))
-    target = torch.tensor(np.random.randint(0,target_vocab_size,(3,seq_length)))
+    source = torch.LongTensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
+    source_mask = torch.ones(1, 1, 10)
+    target = torch.zeros(1, 1).type_as(source)
+    target_mask = create_mask(target.size(1)).type_as(source.data)
 
     print(f"Shape of source vector: {source.shape} \n \
         Shape of output vector: {target.shape}")
@@ -25,14 +28,14 @@ def main():
     print("Model loaded")
     print(model)
 
-    out = model(source, target)
+    out = model(source, target, source_mask, target_mask)
     print(out.shape)
 
     # inference test
     source = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 1]])
     target = torch.tensor([[0]])
     print(source.shape, target.shape)
-    out = model.decode(source, target)
+    out = model.decode(source, target, source_mask, target_mask)
     print(out)
 
 if __name__ == "__main__":
