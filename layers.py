@@ -45,9 +45,12 @@ class MultiHeadAttention(nn.Module):
 
     batch_size = key.size(0)
     seq_length = key.size(1)
-
     # query dimension might be different while decoding
     query_seq_length = query.size(1)
+
+    # Same mask is applied to all attention heads
+    if mask is not None:
+      mask = mask.unsqueeze(1)
 
     # Change dims from (batch_size, seq_len, embed_dim) to (batch_size, seq_len, n_head, embed_per_head)
     key = key.view(batch_size, seq_length, self.n_head, self.embed_dim_single_head)
@@ -126,8 +129,7 @@ class TransformerBlock(nn.Module):
     attention_output = self.attention(key, query, value, mask)
 
     # add residual connection here
-    attention_residual_output = attention_output + value
-    
+    attention_residual_output = attention_output + query
     layer_norm1_output = self.dropout1(self.layer_norm1(attention_residual_output))
     
     feed_forward_output = self.feed_forward(layer_norm1_output)
@@ -153,7 +155,7 @@ class TransformerEncoder(nn.Module):
     """
     super(TransformerEncoder, self).__init__()
     self.embedding_layer = Embedding(vocab_size, embed_dim)
-    self.positional_encoder = PositionalEmbedding(seq_length, embed_dim)
+    self.positional_encoder = PositionalEmbedding(embed_dim)
 
     self.layers = nn.ModuleList([TransformerBlock(embed_dim, hidden_size, n_head, dropout) for i in range(num_layers)])
 
@@ -186,7 +188,7 @@ class Embedding(nn.Module):
 
 
 class PositionalEmbedding(nn.Module):
-  def __init__(self,max_len,embed_dim):
+  def __init__(self, embed_dim, max_len=5000):
       """
       Introduces information to the moodel about the relative or 
       absolute position of the tokens in the sequence
@@ -244,13 +246,18 @@ class DecoderBlock(nn.Module):
   def forward(self, key, query, value, source_mask, target_mask):
     """
     :param  key:    key vector 
-    :param  query:  query vector
-    :param  x:      value vector
+    :param  query:  query vector -> in Decoder query comes from embedding target sequence
+    :param  value:      value vector
     :param  mask:   mask for multi-head attention
     :return:        block transformer output
     """
-    attention = self.attention(key, query, value, mask=target_mask) #32x10x512
-    value = self.dropout(self.norm(attention + value))
+    attention = self.attention(query, query, query, mask=target_mask) #32x10x512
+    query = self.dropout(self.norm(attention + query))
+    # print('Key shape in DecoderBlock: ', key.shape)
+    # print('Query shape in DecoderBlock: ', query.shape)
+    # print('Value shape in DecoderBlock: ', value.shape)
+    # print('Attention Shape in Decoder Block: ', attention.shape)
+    # print('Decoder block ends here\n')
       
     out = self.transformer_block(key, query, value, source_mask)
     return out
@@ -271,7 +278,7 @@ class TransformerDecoder(nn.Module):
         """
 
         self.word_embedding = nn.Embedding(target_vocab_size, embed_dim)
-        self.position_embedding = PositionalEmbedding(seq_len, embed_dim)
+        self.position_embedding = PositionalEmbedding(embed_dim)
 
         self.layers = nn.ModuleList(
             [DecoderBlock(embed_dim, hidden_size, n_head) for _ in range(num_layers)]
@@ -287,12 +294,13 @@ class TransformerDecoder(nn.Module):
         :param target_mask: Padding and subsequent mask for target sequence
         :return:            Output vector
         """
-        x = self.word_embedding(x)  #32x10x512
-        x = self.position_embedding(x) #32x10x512
+        x = self.word_embedding(x)  #batch_size x seq_length x embed_dim
+        x = self.position_embedding(x) #batch_size x seq_length x embed_dim
         x = self.dropout(x)
      
         for layer in self.layers:
-            x = layer(enc_out, x, enc_out, source_mask, target_mask) 
+            # print('Query Shape being sent to decoder block: ', x.shape)
+            x = layer(enc_out, x, enc_out, source_mask, target_mask) # 
 
         out = F.softmax(self.fully_connected_out(x))
 
