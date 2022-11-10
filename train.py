@@ -3,11 +3,68 @@ Training code should be written in this file.
 '''
 from tqdm import tqdm
 from time import time
-from utils import create_mask, TrainState
+from utils import create_mask, TrainState, LabelSmoothing, rate, SimpleLossCompute, MultiGPULossCompute, MyIterator, DummyScheduler, DummyOptimizer, rebatch, batch_size_fn
 from models import Transformer
+from data import Wmt14Dataset, load_vocabulary
+import torch
+from torch import nn
 
-def train(model, data):
-  pass
+MODEL_STORE_PATH = "./models/wmt14_en_fr_model.pt"
+
+def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch_size, n_epochs):
+
+  model.cuda()
+
+  criterion = LabelSmoothing(len(vocabulary), 0, smoothing=0.0)
+  criterion.cuda()
+
+  train_iter = MyIterator(
+    train_data, batch_size=batch_size, device=devices[0], 
+    repeat=False, sort_key=lambda x: (len(x.soure), len(x.target)),
+    batch_size_fn=batch_size_fn, train=True
+  )
+  val_iter = MyIterator(
+    val_data, 
+
+    batch_size=batch_size, device=devices[0], 
+    repeat=False, sort_key=lambda x: (len(x.source), len(x.target)),
+    batch_size_fn=batch_size_fn, train=False
+  )
+
+  model_par = nn.DataParallel(model, device_ids=devices)
+
+  optimizer = torch.optim.Adam(
+      model.parameters(), lr=0.5, betas=(0.9, 0.98), eps = 1e-9
+  )
+  lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
+      optimizer=optimizer,
+      lr_lambda=lambda step: rate(step, embedding_dim, factor=1.0, warmup=400)
+  )
+
+  for epoch in tqdm(range(n_epochs)):
+    model_par.train()
+    run_epoch(
+      (rebatch(len(vocabulary), b) for b in train_iter),
+      model_par,
+      MultiGPULossCompute(model.generator, criterion, devices=devices, opt=optimizer),
+      optimizer,
+      lr_scheduler,
+      mode='train'
+    )
+    model_par.eval()
+    loss = run_epoch(
+      (rebatch(len(vocabulary), b) for b in val_iter),
+      model_par, 
+      MultiGPULossCompute(model.generator, criterion, devices=devices, opt=None),
+      DummyOptimizer(),
+      DummyScheduler(),
+    )
+
+    if n_epochs % 100 == 0:
+      torch.save(model_par, MODEL_STORE_PATH)
+    print(f"Epoch: {epoch}/{n_epochs} | Eval Loss: {loss}")
+  
+    
 
 def run_epoch(data_iter, model, loss_func, optimizer, scheduler, mode='train', accum_iter = 1, train_state=TrainState()):
   """Run training for one epoch
@@ -67,10 +124,25 @@ def run_epoch(data_iter, model, loss_func, optimizer, scheduler, mode='train', a
 
 def main():
   # Load data function
+  train_data = Wmt14Dataset("wmt14_en_test.src", "wmt14_fr_test.trg")
+  val_data = Wmt14Dataset("wmt14_en_validation.src", "wmt14_fr_validation.trg")
+  
   # define model
+  vocabulary = load_vocabulary()
+  embed_dim = 512
+  model = Transformer(
+    embed_dim=embed_dim, #what shold it be?
+    src_vocab_size=len(vocabulary),
+    trg_vocab_size=len(vocabulary),
+    seq_length=None
+    )
   # call train model
+  n_epochs = 2
+  devices = [0,1]
+  batch_size = 12000
+  train_data(model, train_data, val_data, vocabulary, embed_dim, devices, batch_size, n_epochs)
+
   # predict on validation data
-  pass
 
 if __name__ == "__main__":
   main()
