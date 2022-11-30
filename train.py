@@ -3,7 +3,7 @@ Training code should be written in this file.
 '''
 from tqdm import tqdm
 from time import time
-from utils import create_mask, TrainState, LabelSmoothing, rate, SimpleLossCompute, MultiGPULossCompute, MyIterator, DummyScheduler, DummyOptimizer, rebatch, batch_size_fn, set_device
+from utils import create_mask, TrainState, LabelSmoothing, rate, SimpleLossCompute, MultiGPULossCompute, MyIterator, DummyScheduler, DummyOptimizer, rebatch, batch_size_fn, set_device, Batch
 from models import Transformer
 from data import CustomDataset, load_vocabulary, get_dataset_loader
 import torch
@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch_size, n_epochs):
+def train(model, train_loader, val_loader, vocabulary, embedding_dim, devices, batch_size, n_epochs):
   # get appropriate device for computation
   device = set_device()
 
@@ -22,17 +22,6 @@ def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch
   criterion = LabelSmoothing(len(vocabulary), 0, smoothing=0.0)
   criterion.to(device)
 
-  train_iter = MyIterator(
-    train_data, batch_size=batch_size, device=devices[0], 
-    repeat=False, sort_key=lambda x: (len(x[0]), len(x[1])),
-    batch_size_fn=batch_size_fn, train=True
-  )
-  val_iter = MyIterator(
-    val_data, 
-    batch_size=batch_size, device=devices[0], 
-    repeat=False, sort_key=lambda x: (len(x[0]), len(x[1])),
-    batch_size_fn=batch_size_fn, train=False
-  )
 
   model_par = nn.DataParallel(model, device_ids=devices)
 
@@ -47,7 +36,7 @@ def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch
   for epoch in tqdm(range(n_epochs)):
     model_par.train()
     run_epoch(
-      (rebatch(len(vocabulary), b) for b in train_iter),
+      train_loader,
       model_par,
       MultiGPULossCompute(model, criterion, devices=devices, opt=optimizer),
       optimizer,
@@ -56,7 +45,7 @@ def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch
     )
     model_par.eval()
     loss = run_epoch(
-      (rebatch(len(vocabulary), b) for b in val_iter),
+      val_loader,
       model_par, 
       MultiGPULossCompute(model, criterion, devices=devices, opt=None),
       DummyOptimizer(),
@@ -87,6 +76,11 @@ def run_epoch(data_iter, model, loss_func, optimizer, scheduler, mode='train', a
   number_accumulation_steps = 0
 
   for i, batch in enumerate(tqdm(data_iter)):
+    batch = Batch(
+      source=batch[0],
+      target=batch[1],
+      pad=0
+    )
     out = model(batch.source, batch.target, batch.source_mask, batch.target_mask)
     loss, loss_node = loss_func(out, batch.target_y, batch.ntokens)
 
