@@ -2,7 +2,7 @@ import torch
 import logging
 import torch.nn as nn
 import numpy as np 
-from torchtext.legacy.data import Iterator
+from torchtext.legacy import data as d
 from torch.autograd import Variable
 
 def set_device():
@@ -10,7 +10,7 @@ def set_device():
     device = torch.device("cuda")
     logging.info('Setting device to cuda')
   elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
-    device = troch.device("mps")
+    device = torch.device("mps")
     logging.info('Setting device to mps')
   else:
     device = torch.device("cpu")
@@ -148,12 +148,12 @@ class SimpleLossCompute:
     )
     return sloss.data * norm, sloss
 
-class MyIterator(Iterator):
+class MyIterator(d.Iterator):
   def create_batches(self):
       if self.train:
           def pool(data, random_shuffler):
-              for p in data.batch(data, self.batch_size * 100):
-                  p_batch = data.batch(
+              for p in d.batch(data, self.batch_size * 100):
+                  p_batch = d.batch(
                       sorted(p, key=self.sort_key),
                       self.batch_size, self.batch_size_fn)
                   for b in random_shuffler(list(p_batch)):
@@ -162,7 +162,7 @@ class MyIterator(Iterator):
           
       else:
           self.batches = []
-          for b in data.batch(self.data(), self.batch_size,
+          for b in d.batch(self.data(), self.batch_size,
                                         self.batch_size_fn):
               self.batches.append(sorted(b, key=self.sort_key))
 
@@ -238,8 +238,8 @@ def batch_size_fn(new, count, sofar):
     if count == 1:
         max_src_in_batch = 0
         max_tgt_in_batch = 0
-    max_src_in_batch = max(max_src_in_batch,  len(new.source))
-    max_tgt_in_batch = max(max_tgt_in_batch,  len(new.target) + 2)
+    max_src_in_batch = max(max_src_in_batch,  len(new[0]))
+    max_tgt_in_batch = max(max_tgt_in_batch,  len(new[1]) + 2)
     src_elements = count * max_src_in_batch
     tgt_elements = count * max_tgt_in_batch
     return max(src_elements, tgt_elements)

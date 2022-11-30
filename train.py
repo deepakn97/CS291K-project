@@ -5,7 +5,7 @@ from tqdm import tqdm
 from time import time
 from utils import create_mask, TrainState, LabelSmoothing, rate, SimpleLossCompute, MultiGPULossCompute, MyIterator, DummyScheduler, DummyOptimizer, rebatch, batch_size_fn, set_device
 from models import Transformer
-from data import CustomDataset, load_vocabulary
+from data import CustomDataset, load_vocabulary, get_dataset_loader
 import torch
 from torch import nn
 from constants import *
@@ -24,13 +24,13 @@ def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch
 
   train_iter = MyIterator(
     train_data, batch_size=batch_size, device=devices[0], 
-    repeat=False, sort_key=lambda x: (len(x.soure), len(x.target)),
+    repeat=False, sort_key=lambda x: (len(x[0]), len(x[1])),
     batch_size_fn=batch_size_fn, train=True
   )
   val_iter = MyIterator(
     val_data, 
     batch_size=batch_size, device=devices[0], 
-    repeat=False, sort_key=lambda x: (len(x.source), len(x.target)),
+    repeat=False, sort_key=lambda x: (len(x[0]), len(x[1])),
     batch_size_fn=batch_size_fn, train=False
   )
 
@@ -128,25 +128,28 @@ def run_epoch(data_iter, model, loss_func, optimizer, scheduler, mode='train', a
 def main():
   # Load data function
   logger.info(f'Loading Dataset...')
+  batch_size = 32
+  pad_idx = 0
   train_data = CustomDataset("wmt14_en_validation.src", "wmt14_fr_validation.trg")
   val_data = CustomDataset("wmt14_en_test.src", "wmt14_fr_test.trg")
+  train_loader = get_dataset_loader(train_data, batch_size, pad_idx)
+  val_loader = get_dataset_loader(val_data, batch_size, pad_idx)
   
   # define model
   logger.info(f'Loading Vocabulary...')
   vocabulary = load_vocabulary()
-  embed_dim = 512
+  embed_dim = 128
   logger.info(f'Initializing Model...')
   model = Transformer(
     embed_dim=embed_dim, #what shold it be?
     src_vocab_size=len(vocabulary),
     trg_vocab_size=len(vocabulary),
-    seq_length=None
+    seq_length=None # Largest sequence length in training dataset.
     )
   # call train model
   n_epochs = 2
   devices = [0,1]
-  batch_size = 12000
-  train(model, train_data, val_data, vocabulary, embed_dim, devices, batch_size, n_epochs)
+  train(model, train_loader, val_loader, vocabulary, embed_dim, devices, batch_size, n_epochs)
 
 if __name__ == "__main__":
   main()
