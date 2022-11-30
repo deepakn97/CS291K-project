@@ -9,7 +9,6 @@ from pathlib import Path
 import torch
 from torch.utils.data import Dataset
 import linecache
-from data import CustomDataset
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
 
@@ -138,9 +137,7 @@ class CustomDataset(Dataset):
         target_sentence = [int(x) for x in target_sentence.split(' ')[:-1]]
         return torch.Tensor(source_sentence), torch.Tensor(target_sentence)
 
-def get_train_loader(dataset, batch_size, num_workers=0, shuffle=True, pin_memory=True): #increase num_workers according to CPU
-    #get pad_idx for collate fn
-    pad_idx = dataset.source_vocab.stoi['<PAD>']
+def get_dataset_loader(dataset, batch_size, pad_idx, num_workers=0, shuffle=True, pin_memory=True): #increase num_workers according to CPU
     #define loader
     loader = DataLoader(dataset, batch_size = batch_size, num_workers = num_workers,
                         shuffle=shuffle,
