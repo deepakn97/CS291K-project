@@ -130,3 +130,6 @@ dmypy.json
 
 # vscode files
 .vscode
+
+# ignore antonis
+**.*.antonis
