@@ -9,10 +9,8 @@ from pathlib import Path
 from torch.utils.data import Dataset
 import linecache
 
-from transformers import GPT2Tokenizer
+from constants import *
 from datasets import load_dataset
-
-DATASET_DIR = "./datasets/"
 
 def process_dataset(dataset_name="wmt14", dataset_languages="fr-en"):
     languages = dataset_languages.split('-')
@@ -71,16 +69,6 @@ def process_dataset(dataset_name="wmt14", dataset_languages="fr-en"):
     print("Saving vocabulary...")
     filename_vocabulary = Path(DATASET_DIR, "vocab.json")
     tokenizer.save_vocabulary(save_directory=DATASET_DIR)
-    # Update vocabulary with extra tokens
-    vocabulary = json.load(open(filename_vocabulary, 'r'))
-    extra_vocabulary = tokenizer.get_added_vocab()
-    new_vocabulary= {**vocabulary, **extra_vocabulary}
-    json.dump(
-        new_vocabulary, 
-        open(filename_vocabulary,'w', encoding="utf-8"),
-        ensure_ascii=False
-    )
-        
     print("FINISHED!")
 
 def load_data(dataset_name, dataset_languages, split):
@@ -109,26 +97,25 @@ def load_data(dataset_name, dataset_languages, split):
     return source_sentences, target_sentences
 
 
-class Wmt14Dataset(Dataset):
-    def __init__(self, src_filename, trg_filename):
-
-        self.src_filename = src_filename
-        self.trg_filename = trg_filename
-        self.num_pairs = sum(1 for _ in open(Path(DATASET_DIR, src_filename), 'r'))
+class CustomDataset(Dataset):
+    def __init__(self, source_filename, target_filename):
+        self.source_filename = source_filename
+        self.target_filename = target_filename
+        self.num_pairs = sum(1 for _ in open(Path(DATASET_DIR, source_filename), 'r'))
 
     def __len__(self):
         return self.num_pairs
 
     def __getitem__(self, idx):
-        source_sentence = linecache.getline(str(Path(DATASET_DIR,self.src_filename)), idx)
+        source_sentence = linecache.getline(str(Path(DATASET_DIR, self.source_filename)), idx)
         source_sentence = source_sentence.split(' ')[:-1]
-        target_sentence = linecache.getline(str(Path(DATASET_DIR, self.src_filename)), idx)
+        target_sentence = linecache.getline(str(Path(DATASET_DIR, self.target_filename)), idx)
         target_sentence = target_sentence.split(' ')[:-1]
         return source_sentence, target_sentence
 
 
 def load_vocabulary():
-    filename_vocabulary = "vocab.json"
+    filename_vocabulary = Path(DATASET_DIR, "vocab.json")
     vocabulary = json.load(open(filename_vocabulary, 'r'))
     return vocabulary
 

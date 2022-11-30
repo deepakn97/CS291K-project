@@ -3,20 +3,24 @@ Training code should be written in this file.
 '''
 from tqdm import tqdm
 from time import time
-from utils import create_mask, TrainState, LabelSmoothing, rate, SimpleLossCompute, MultiGPULossCompute, MyIterator, DummyScheduler, DummyOptimizer, rebatch, batch_size_fn
+from utils import create_mask, TrainState, LabelSmoothing, rate, SimpleLossCompute, MultiGPULossCompute, MyIterator, DummyScheduler, DummyOptimizer, rebatch, batch_size_fn, set_device
 from models import Transformer
-from data import Wmt14Dataset, load_vocabulary
+from data import CustomDataset, load_vocabulary
 import torch
 from torch import nn
-
-MODEL_STORE_PATH = "./models/wmt14_en_fr_model.pt"
+from constants import *
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch_size, n_epochs):
+  # get appropriate device for computation
+  device = set_device()
 
-  model.cuda()
+  model.to(device)
 
   criterion = LabelSmoothing(len(vocabulary), 0, smoothing=0.0)
-  criterion.cuda()
+  criterion.to(device)
 
   train_iter = MyIterator(
     train_data, batch_size=batch_size, device=devices[0], 
@@ -25,7 +29,6 @@ def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch
   )
   val_iter = MyIterator(
     val_data, 
-
     batch_size=batch_size, device=devices[0], 
     repeat=False, sort_key=lambda x: (len(x.source), len(x.target)),
     batch_size_fn=batch_size_fn, train=False
@@ -46,7 +49,7 @@ def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch
     run_epoch(
       (rebatch(len(vocabulary), b) for b in train_iter),
       model_par,
-      MultiGPULossCompute(model.generator, criterion, devices=devices, opt=optimizer),
+      MultiGPULossCompute(model, criterion, devices=devices, opt=optimizer),
       optimizer,
       lr_scheduler,
       mode='train'
@@ -55,7 +58,7 @@ def train(model, train_data, val_data, vocabulary, embedding_dim, devices, batch
     loss = run_epoch(
       (rebatch(len(vocabulary), b) for b in val_iter),
       model_par, 
-      MultiGPULossCompute(model.generator, criterion, devices=devices, opt=None),
+      MultiGPULossCompute(model, criterion, devices=devices, opt=None),
       DummyOptimizer(),
       DummyScheduler(),
     )
@@ -124,12 +127,15 @@ def run_epoch(data_iter, model, loss_func, optimizer, scheduler, mode='train', a
 
 def main():
   # Load data function
-  train_data = Wmt14Dataset("wmt14_en_test.src", "wmt14_fr_test.trg")
-  val_data = Wmt14Dataset("wmt14_en_validation.src", "wmt14_fr_validation.trg")
+  logger.info(f'Loading Dataset...')
+  train_data = CustomDataset("wmt14_en_validation.src", "wmt14_fr_validation.trg")
+  val_data = CustomDataset("wmt14_en_test.src", "wmt14_fr_test.trg")
   
   # define model
+  logger.info(f'Loading Vocabulary...')
   vocabulary = load_vocabulary()
   embed_dim = 512
+  logger.info(f'Initializing Model...')
   model = Transformer(
     embed_dim=embed_dim, #what shold it be?
     src_vocab_size=len(vocabulary),
@@ -140,9 +146,7 @@ def main():
   n_epochs = 2
   devices = [0,1]
   batch_size = 12000
-  train_data(model, train_data, val_data, vocabulary, embed_dim, devices, batch_size, n_epochs)
-
-  # predict on validation data
+  train(model, train_data, val_data, vocabulary, embed_dim, devices, batch_size, n_epochs)
 
 if __name__ == "__main__":
   main()

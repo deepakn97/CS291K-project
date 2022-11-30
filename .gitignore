@@ -130,3 +130,6 @@ dmypy.json
 
 # vscode files
 .vscode
+
+# project specific ignores
+datasets

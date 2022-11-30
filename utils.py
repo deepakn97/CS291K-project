@@ -1,8 +1,22 @@
 import torch 
+import logging
 import torch.nn as nn
 import numpy as np 
-from torchtext import data
+from torchtext.legacy.data import Iterator
 from torch.autograd import Variable
+
+def set_device():
+  if torch.cuda.is_available():
+    device = torch.device("cuda")
+    logging.info('Setting device to cuda')
+  elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
+    device = troch.device("mps")
+    logging.info('Setting device to mps')
+  else:
+    device = torch.device("cpu")
+    logging.info('Setting device to cpu')
+  
+  return device
 
 def create_mask(size):
   """
@@ -134,11 +148,11 @@ class SimpleLossCompute:
     )
     return sloss.data * norm, sloss
 
-class MyIterator(data.Iterator):
+class MyIterator(Iterator):
   def create_batches(self):
       if self.train:
-          def pool(d, random_shuffler):
-              for p in data.batch(d, self.batch_size * 100):
+          def pool(data, random_shuffler):
+              for p in data.batch(data, self.batch_size * 100):
                   p_batch = data.batch(
                       sorted(p, key=self.sort_key),
                       self.batch_size, self.batch_size_fn)
@@ -216,7 +230,6 @@ class MultiGPULossCompute:
             self.opt.step()
             self.opt.optimizer.zero_grad()
         return total * normalize
-
 
 global max_src_in_batch, max_tgt_in_batch
 def batch_size_fn(new, count, sofar):
