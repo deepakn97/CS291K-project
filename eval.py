@@ -27,9 +27,7 @@ def read_dataset(filename):
 
     return dataset
 
-
-if __name__ == '__main__':
-
+def main():
     # Load tokenizer
     tokenizer = GPT2Tokenizer.from_pretrained('./models/tokenizer')
 
@@ -65,3 +63,6 @@ if __name__ == '__main__':
     with open(Path(RESULTS_DIR, 'llm_results.txt'), 'w') as f:
         f.write(f"BLEU Mean: {bleu_mean}\n")
         f.write(f"BLEU Std: {bleu_std}\n")
+
+if __name__ == '__main__':
+    main()
