@@ -1,31 +1,25 @@
 '''
 Inference code should be written in this file.
 '''
-import argparse
-import torch
-from models import Transformer
-import numpy as np 
+from pathlib import Path
 
-def predict(model, data):
-  
-  model.eval()
-  for batch_x, batch_y in data: # take into account batches
-    output = model.decode( batch_x, torch.tensor(np.zeros()) )
+from constants import *
+
+def read_dataset(filename):
+    # Open source
+    with open(Path(DATASET_DIR, filename), 'r') as f:
+        dataset = []
+        for sentence in f:
+            dataset.append([int(x) for x in sentence.split(' ')[:-1]])
+
+    return dataset
 
 
 
 if __name__ == "__main__":
-
-  parser = argparse.ArgumentParser()
-  parser.add_argument('saved_model', type=str)
-  parser.add_argument('dataset', type=str)
-  args = parser.parse_args()
   
-  model = torch.load(args.saved_model)
-  # Load data
-  data = None
+  # Open test source
+  source_test_dataset = read_dataset('wmt14_en_test.src')
 
-  predict(
-    model = model,
-    data = data
-  )
+  # Load the model 
+  
