@@ -34,7 +34,7 @@ class Transformer(nn.Module):
         nn.init.xavier_uniform_(p)
 
   # TODO(deepakn97): Modify the function to create target and target_mask
-  def generate_greedy(self, source, source_mask, max_seq_length, bos_token):
+  def generate_greedy(self, source, source_mask, max_seq_length, bos_token, eos_token):
     """
     :param source: input of encoder
     :param target: input of decoder
@@ -43,7 +43,7 @@ class Transformer(nn.Module):
     """
     embedded_inp = self.word_embedding(source)
     enc_out = self.encoder(embedded_inp, source_mask)
-    target = torch.ones(1,1).fill_(bos_token).type_as(source.data)
+    target = torch.ones(source.shape[0],1).fill_(bos_token).type_as(source.data)
     target_mask = create_mask(target.shape[1]).type_as(target.data)
 
     #TODO(deepakn97): check for <eos> token and end early
@@ -53,9 +53,11 @@ class Transformer(nn.Module):
       out = self.decoder(embedded_target, enc_out, source_mask, target_mask) # batch_size x seq_length x vocab_size
       prob = self.generator(out[:, -1]) # batch_size x vocab_size
       _, next_word = torch.max(prob, dim=1)
-      next_word = next_word.data[0]
+      next_word = next_word.data[0] # 1
+      if next_word == eos_token:
+        break
       target = torch.cat(
-        [target, torch.zeros(1, 1).type_as(source.data).fill_(next_word)], dim=1
+        [target, torch.zeros(1,1).fill_(next_word).type_as(source.data)], dim=1
       )
 
     return target

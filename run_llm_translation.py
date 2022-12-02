@@ -7,8 +7,6 @@ from transformers import GPT2Tokenizer
 
 from constants import *
 
-BOS_TOKEN = 50257
-EOS_TOKEN = 50258
 API_KEYS_FILE = "keys.txt"
 PREDICTIONS_DIR = "./predictions/"
 
@@ -40,12 +38,12 @@ def generate_few_shot_prompt(tokenizer, source_train_dataset, target_train_datas
 
     for i in range(n_few_shot):
         source = source_train_dataset[i]
-        source = [token for token in source if (token != BOS_TOKEN and token != EOS_TOKEN)]
+        source = [token for token in source if (token != tokenizer.bos_token_id and token != tokenizer.eos_token_id)]
         source = tokenizer.decode(source)
         few_shot_prompt += f"English: {source} \n"
 
         target = target_train_dataset[i]
-        target = [token for token in target if (token != BOS_TOKEN and token != EOS_TOKEN)]
+        target = [token for token in target if (token != tokenizer.bos_token_id and token != tokenizer.eos_token_id)]
         target = tokenizer.decode(target)
         few_shot_prompt += f"French: {target} \n\n"
 
@@ -54,7 +52,7 @@ def generate_few_shot_prompt(tokenizer, source_train_dataset, target_train_datas
 
 def generate_last_shot_prompt(tokenizer, few_shot_prompt, source):
 
-    source = [token for token in source if (token != BOS_TOKEN and token != EOS_TOKEN)]
+    source = [token for token in source if (token != tokenizer.bos_token_id and token != tokenizer.eos_token_id)]
     source = tokenizer.decode(source)
 
     prompt = few_shot_prompt + f"English: {source} \n"
@@ -107,12 +105,7 @@ def main():
     # target_test_dataset = read_dataset('wmt14_fr_test.trg')
 
     # Load tokenizer
-    tokenizer = GPT2Tokenizer.from_pretrained(
-            "gpt2",
-            unk_token="<|unk|>",
-            bos_token="<|bos|>",
-            eos_token="<|eos|>", 
-            )
+    tokenizer = GPT2Tokenizer.from_pretrained('./models/tokenizer')
 
     # Generate few-shot prompt
     few_shot_prompt = generate_few_shot_prompt(tokenizer, source_train_dataset, target_train_dataset, n_few_shot=10)
@@ -128,7 +121,7 @@ def main():
         predicted_targets.append(predicted_target)
 
     # Save results
-    with open(Path(PREDICTIONS_DIR, 'wmt14_en_fr.txt'), 'w') as f:
+    with open(Path(PREDICTIONS_DIR, 'wmt14_en_fr_llm.txt'), 'w') as f:
         for predicted_target in predicted_targets:
             f.write(predicted_target + '\n')
 

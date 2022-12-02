@@ -8,8 +8,6 @@ from constants import *
 
 PREDICTIONS_DIR = "./predictions/"
 RESULTS_DIR = "./results/"
-BOS_TOKEN = 50257
-EOS_TOKEN = 50258
 
 def bleu_scoring(predictions, targets):
     bleu_scores = []
@@ -32,25 +30,20 @@ def read_dataset(filename):
 
 if __name__ == '__main__':
 
-     # Load tokenizer
-    tokenizer = GPT2Tokenizer.from_pretrained(
-            "gpt2",
-            unk_token="<|unk|>",
-            bos_token="<|bos|>",
-            eos_token="<|eos|>", 
-            )
+    # Load tokenizer
+    tokenizer = GPT2Tokenizer.from_pretrained('./models/tokenizer')
 
     # Open target
     target_test_filename = "wmt14_fr_test.trg"
     target_test_dataset = read_dataset(target_test_filename)
     targets = []
     for sentence in target_test_dataset:
-        sentence = [token for token in sentence if (token != BOS_TOKEN and token != EOS_TOKEN)]
+        sentence = [token for token in sentence if (token != tokenizer.bos_token_id and token != tokenizer.eos_token_id)]
         sentence = tokenizer.decode(sentence)
         targets.append(sentence.split(" "))
 
     # Open predictions
-    predictions_file = "wmt14_en_fr.txt"
+    predictions_file = "wmt14_en_fr_llm.txt"
     with open(Path(PREDICTIONS_DIR, predictions_file), 'r') as f:
         predictions = []
         for sentence in f:
