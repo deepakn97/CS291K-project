@@ -1,0 +1,13 @@
+{
+  "DATASETS_DIR": "./datasets/", 
+  "MODELS_DIR": "./models/",
+  "NUM_EPOCHS": 2,
+  "BATCH_SIZE": 128,
+  "LEARNING_RATE": 0.0001,
+  "NUM_ENCODER_LAYER": 2,
+  "NUM_DECODER_LAYER": 2,
+  "EMBEDDING_DIM": 256,
+  "NUM_ATTENTION_HEADS": 2,
+  "FFN_HIDDEN_DIM": 256,
+  "DEVICES": [4, 5, 6, 7]
+}

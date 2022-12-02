@@ -7,7 +7,7 @@ from layers import *
 from utils import create_mask
 
 class Transformer(nn.Module):
-  def __init__(self, embed_dim, src_vocab_size, trg_vocab_size, seq_length, num_layers_enc=2, num_layers_dec=3, hidden_size=2048, n_head=8, enc_dropout=0.2, dec_dropout=0.2):
+  def __init__(self, embed_dim, src_vocab_size, trg_vocab_size, num_layers_enc=2, num_layers_dec=2, hidden_size=512, n_head=4, enc_dropout=0.2, dec_dropout=0.2):
     """
     :param embed_dim: embedding dimensions
     :param src_vocab_size: vocabulary size for input
@@ -23,8 +23,10 @@ class Transformer(nn.Module):
     super(Transformer, self).__init__()
 
     self.out_vocab_size = trg_vocab_size
-    self.encoder = TransformerEncoder(seq_length, src_vocab_size, embed_dim, num_layers_enc, hidden_size, n_head, enc_dropout)
-    self.decoder = TransformerDecoder(trg_vocab_size, embed_dim, seq_length, num_layers_dec, hidden_size, n_head, dec_dropout)
+    self.word_embedding = Embedding(src_vocab_size, embed_dim)
+    self.encoder = TransformerEncoder(embed_dim, num_layers_enc, hidden_size, n_head, enc_dropout)
+    self.decoder = TransformerDecoder(embed_dim, num_layers_dec, hidden_size, n_head, dec_dropout)
+    self.generator = Generator(trg_vocab_size, embed_dim)
 
     # Inititalize parameters with Glorot / fan_avg
     for p in self.parameters():
@@ -32,19 +34,24 @@ class Transformer(nn.Module):
         nn.init.xavier_uniform_(p)
 
   # TODO(deepakn97): Modify the function to create target and target_mask
-  def generate_greedy(self, source, target, source_mask, target_mask, max_seq_length):
+  def generate_greedy(self, source, source_mask, max_seq_length, bos_token):
     """
     :param source: input of encoder
     :param target: input of decoder
 
     :return out_prob: returns final prediction of sequence
     """
-    enc_out = self.encoder(source, source_mask)
+    embedded_inp = self.word_embedding(source)
+    enc_out = self.encoder(embedded_inp, source_mask)
+    target = torch.ones(1,1).fill_(bos_token).type_as(source.data)
+    target_mask = create_mask(target.shape[1]).type_as(target.data)
 
     #TODO(deepakn97): check for <eos> token and end early
     for i in range(max_seq_length):
-      out = self.decoder(target, enc_out, source_mask, target_mask) # batch_size x seq_length x vocab_size
-      prob = out[:, -1]
+      # TODO(dnathani): 
+      embedded_target = self.word_embedding(target)
+      out = self.decoder(embedded_target, enc_out, source_mask, target_mask) # batch_size x seq_length x vocab_size
+      prob = self.generator(out[:, -1]) # batch_size x vocab_size
       _, next_word = torch.max(prob, dim=1)
       next_word = next_word.data[0]
       target = torch.cat(
@@ -54,10 +61,12 @@ class Transformer(nn.Module):
     return target
 
   def encode(self, source, source_mask):
-    return self.encoder(source, source_mask)
+    embedded_inp = self.word_embedding(source)
+    return self.encoder(embedded_inp, source_mask)
   
   def decode(self, target, enc_out, source_mask, target_mask):
-    return self.decoder(target, enc_out, source_mask, target_mask)
+    embedded_target = self.word_embedding(target)
+    return self.decoder(embedded_target, enc_out, source_mask, target_mask)
   
   def forward(self, source, target, source_mask, target_mask):
     """
@@ -66,7 +75,9 @@ class Transformer(nn.Module):
     
     :return out: final vector which returns probabilites of each target word
     """
-    encoder_out = self.encoder(source, source_mask)
-    outputs = self.decoder(target, encoder_out, source_mask, target_mask)
+    embedded_source = self.word_embedding(source)
+    embedded_target = self.word_embedding(target)
+    encoder_out = self.encoder(embedded_source, source_mask)
+    outputs = self.decoder(embedded_target, encoder_out, source_mask, target_mask)
     return outputs
 

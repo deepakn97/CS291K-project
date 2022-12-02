@@ -52,42 +52,28 @@ def rate(step, model_size, factor, warmup):
   if step == 0:
     step = 1
   step_num_term = step ** (-0.5)
-  warmup_term = (step * warmup) ** (-1.5)
+  warmup_term = step * warmup ** (-1.5)
   model_size_term = model_size ** (-0.5)
-  return model_size_term * min(step_num_term, warmup_term)
+  return factor * model_size_term * min(step_num_term, warmup_term)
 
-class DummyOptimizer(torch.optim.Optimizer):
-  def __init__(self):
-    self.param_groups = [{'lr': 0}]
-    None
-  
-  def step(self):
-    None
-  
-  def zero_grad(self, set_to_none=False):
-    None
-
-class DummyScheduler:
-  def step(self):
-    None
 
 class Batch:
   """This class loads a batch of the data"""
-  def __init__(self, source, target=None, pad=0):
+  def __init__(self, source, target=None, pad_idx=-100):
     """
     :param source: source sequence
     :param target: target sequence
     :param pad: padding token
     """
     self.source = source
-    self.source_mask = (source != pad).unsqueeze(-2)
+    self.source_mask = (source != pad_idx).unsqueeze(-2)
     self.target = target
     if target is not None:
         self.target = target[:, :-1]
         self.target_y = target[:, 1:]
         self.target_mask = \
-            self.make_mask(self.target, pad)
-        self.ntokens = (self.target_y != pad).data.sum()
+            self.make_mask(self.target, pad_idx)
+        self.ntokens = (self.target_y != pad_idx).data.sum()
     
   @staticmethod
   def make_mask(target, pad):
@@ -103,7 +89,6 @@ class TrainState:
   accumulation_step = 0 # Number of gradient accumulation steps
   samples = 0 # total number of examples used
   tokens = 0 # total number of tokens processed
-
 
 class LabelSmoothing(nn.Module):
   """Implement Label Smoothing
@@ -136,6 +121,7 @@ class LabelSmoothing(nn.Module):
     self.true_dist = true_dist
     return self.criterion(x, true_dist.clone().detach())
 
+# We don't need this currently.
 class SimpleLossCompute:
   def __init__(self, criterion):
     self.criterion = criterion
@@ -172,14 +158,16 @@ def rebatch(pad_idx, batch):
     return Batch(src, trg, pad_idx)
 
 
+# Multi GPU loss compute for one epoch
 class MultiGPULossCompute:
     "A multi-gpu loss compute and train function."
-    def __init__(self, generator, criterion, devices, opt=None, chunk_size=5):
+    def __init__(self, generator, criterion, devices, opt=None, scheduler=None, chunk_size=5):
         # Send out to different gpus.
         self.generator = generator
         self.criterion = nn.parallel.replicate(criterion, 
                                                devices=devices)
         self.opt = opt
+        self.scheduler = scheduler
         self.devices = devices
         self.chunk_size = chunk_size
         
@@ -211,8 +199,8 @@ class MultiGPULossCompute:
             # Sum and normalize loss
             l = nn.parallel.gather(loss, 
                                    target_device=self.devices[0])
-            l = l.sum()[0] / normalize
-            total += l.data[0]
+            l = l.sum() / normalize
+            total += l.data
 
             # Backprop loss to output of transformer
             if self.opt is not None:
@@ -228,7 +216,8 @@ class MultiGPULossCompute:
                                     target_device=self.devices[0])
             o1.backward(gradient=o2)
             self.opt.step()
-            self.opt.optimizer.zero_grad()
+            self.opt.zero_grad(set_to_none=True)
+            self.scheduler.step()
         return total * normalize
 
 global max_src_in_batch, max_tgt_in_batch
@@ -243,3 +232,17 @@ def batch_size_fn(new, count, sofar):
     src_elements = count * max_src_in_batch
     tgt_elements = count * max_tgt_in_batch
     return max(src_elements, tgt_elements)
+class DummyOptimizer(torch.optim.Optimizer):
+  def __init__(self):
+    self.param_groups = [{'lr': 0}]
+    None
+  
+  def step(self):
+    None
+  
+  def zero_grad(self, set_to_none=False):
+    None
+
+class DummyScheduler:
+  def step(self):
+    None

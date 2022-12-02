@@ -32,7 +32,7 @@ print("Model loaded")
 # inference test
 source = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 1]])
 target = torch.tensor([[0]])
-out = model.generate_greedy(source, target, source_mask, target_mask, 10)
+out = model.generate_greedy(source, source_mask, max_len, bos_token)
 print(out)
 # %%
 

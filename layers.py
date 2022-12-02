@@ -12,7 +12,7 @@ class MultiHeadAttention(nn.Module):
   '''
   This class implements multi head attention for a transformer.
   '''
-  def __init__(self, embed_dim=512, n_head=8) -> None:
+  def __init__(self, embed_dim, n_head) -> None:
     """
     :param embed_dim: dimension of the word embeddings vector
     :param n_head: number of self-attention heads
@@ -92,7 +92,7 @@ class MultiHeadAttention(nn.Module):
     return output
     
 class TransformerBlock(nn.Module):
-  def __init__(self, embed_dim, hidden_size=2048, n_head=8, dropout=0.2):
+  def __init__(self, embed_dim, hidden_size, n_head, dropout=0.2):
     """
     :param embed_dim: dimension of embeddings
     :param hidden_size: hidden layer dimension for feed forward layer
@@ -141,9 +141,8 @@ class TransformerBlock(nn.Module):
     return layer_norm2_out
     
 class TransformerEncoder(nn.Module):
-  def __init__(self, seq_length, vocab_size, embed_dim, num_layers, hidden_size, n_head, dropout) -> None:
+  def __init__(self, embed_dim, num_layers, hidden_size, n_head, dropout) -> None:
     """
-    :param seq_length: input sequence length
     :param vocab_size: size of the vocabulary
     :param embed_dim: dimension of embeddings
     :param num_layers: number of encoder layers
@@ -154,18 +153,24 @@ class TransformerEncoder(nn.Module):
     :return out: output of the encoder
     """
     super(TransformerEncoder, self).__init__()
-    self.embedding_layer = Embedding(vocab_size, embed_dim)
     self.positional_encoder = PositionalEmbedding(embed_dim)
 
     self.layers = nn.ModuleList([TransformerBlock(embed_dim, hidden_size, n_head, dropout) for i in range(num_layers)])
 
   def forward(self, x, mask=None):
-    embedded_input = self.embedding_layer(x)
-    embedded_input = self.positional_encoder(embedded_input)
+    embedded_input = self.positional_encoder(x)
     for layer in self.layers:
       out = layer(embedded_input, embedded_input, embedded_input, mask)
     
     return out
+
+class Generator(nn.Module):
+  def __init__(self, vocab_size, embed_dim):
+    super(Generator, self).__init__()
+    self.proj = nn.Linear(embed_dim, vocab_size)
+
+  def forward(self, x):
+    return F.log_softmax(self.proj(x), dim=-1)
 
 class Embedding(nn.Module):
     def __init__(self, vocab_size, embed_dim):
@@ -228,7 +233,7 @@ class PositionalEmbedding(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-  def __init__(self, embed_dim, hidden_size=2048, n_head=8, dropout=0.2):
+  def __init__(self, embed_dim, hidden_size=512, n_head=4, dropout=0.2):
     super(DecoderBlock, self).__init__()
     """
     Converts the internal embeddings to ouput embeddings
@@ -264,7 +269,7 @@ class DecoderBlock(nn.Module):
 
 
 class TransformerDecoder(nn.Module):
-    def __init__(self, target_vocab_size, embed_dim, seq_len, num_layers=2, hidden_size=2048, n_head=8, dropout=0.2):
+    def __init__(self, embed_dim, num_layers=2, hidden_size=512, n_head=4, dropout=0.2):
         super(TransformerDecoder, self).__init__()
         """  
         Transforms the code 
@@ -277,14 +282,13 @@ class TransformerDecoder(nn.Module):
         :param  droupout:           drouput value
         """
 
-        self.word_embedding = nn.Embedding(target_vocab_size, embed_dim)
         self.position_embedding = PositionalEmbedding(embed_dim)
 
         self.layers = nn.ModuleList(
             [DecoderBlock(embed_dim, hidden_size, n_head) for _ in range(num_layers)]
         )
-        self.fully_connected_out = nn.Linear(embed_dim, target_vocab_size)
         self.dropout = nn.Dropout(dropout)
+        self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x, enc_out, source_mask, target_mask):
         """
@@ -294,7 +298,6 @@ class TransformerDecoder(nn.Module):
         :param target_mask: Padding and subsequent mask for target sequence
         :return:            Output vector
         """
-        x = self.word_embedding(x)  #batch_size x seq_length x embed_dim
         x = self.position_embedding(x) #batch_size x seq_length x embed_dim
         x = self.dropout(x)
      
@@ -302,6 +305,4 @@ class TransformerDecoder(nn.Module):
             # print('Query Shape being sent to decoder block: ', x.shape)
             x = layer(enc_out, x, enc_out, source_mask, target_mask) # 
 
-        out = F.softmax(self.fully_connected_out(x))
-
-        return out
+        return self.norm(x)

@@ -11,6 +11,7 @@ from torch.utils.data import Dataset
 import linecache
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.utils.rnn import pad_sequence
+from torch.nn import ConstantPad1d
 
 from transformers import GPT2Tokenizer
 from constants import *
@@ -75,24 +76,23 @@ def process_dataset(dataset_name="wmt14", dataset_languages="fr-en"):
     tokenizer.save_vocabulary(save_directory=DATASET_DIR)
     print("FINISHED!")
 
-class MyCollate:
+class MyCollateFn:
     def __init__(self, pad_idx):
         self.pad_idx = pad_idx
-        
-    
     #__call__: a default method
     ##   First the obj is created using MyCollate(pad_idx) in data loader
     ##   Then if obj(batch) is called -> __call__ runs by default
     def __call__(self, batch):
         #get all source indexed sentences of the batch
         source = [item[0] for item in batch] 
+        
         #pad them using pad_sequence method from pytorch. 
-        source = pad_sequence(source, batch_first=False, padding_value = self.pad_idx) 
+        source = pad_sequence(source, batch_first=True, padding_value = self.pad_idx) 
         
         #get all target indexed sentences of the batch
         target = [item[1] for item in batch] 
         #pad them using pad_sequence method from pytorch. 
-        target = pad_sequence(target, batch_first=False, padding_value = self.pad_idx)
+        target = pad_sequence(target, batch_first=True, padding_value = self.pad_idx)
         return source, target
 
 def load_data(dataset_name, dataset_languages, split):
@@ -122,31 +122,41 @@ def load_data(dataset_name, dataset_languages, split):
 
 
 class CustomDataset(Dataset):
-    def __init__(self, source_filename, target_filename):
-        self.source_filename = source_filename
-        self.target_filename = target_filename
-        self.num_pairs = sum(1 for _ in open(Path(DATASET_DIR, source_filename), 'r'))
+    def __init__(self, data_dir, split='train'):
+        self.dataset_dir = data_dir
+        self.source_filename = os.path.join(data_dir, f'{split}.src')
+        self.target_filename = os.path.join(data_dir, f'{split}.trg')
+        self.num_pairs = sum(1 for _ in open(self.source_filename, 'r'))
 
     def __len__(self):
         return self.num_pairs
 
     def __getitem__(self, idx):
-        source_sentence = linecache.getline(str(Path(DATASET_DIR, self.source_filename)), idx+1)
+        source_sentence = linecache.getline(self.source_filename, idx+1)
         source_sentence = [int(x) for x in source_sentence.split(' ')[:-1]]
-        target_sentence = linecache.getline(str(Path(DATASET_DIR, self.target_filename)), idx+1)
+        target_sentence = linecache.getline(self.target_filename, idx+1)
         target_sentence = [int(x) for x in target_sentence.split(' ')[:-1]]
-        return torch.Tensor(source_sentence), torch.Tensor(target_sentence)
+        return torch.as_tensor(source_sentence, dtype=torch.long), torch.as_tensor(target_sentence, dtype=torch.long)
 
-def get_dataset_loader(dataset, batch_size, pad_idx, num_workers=0, shuffle=True, pin_memory=True): #increase num_workers according to CPU
+def get_dataset_loader(dataset, batch_size, pad_idx, num_workers=0, shuffle=True, pin_memory=True): 
+    #increase num_workers according to CPU
     #define loader
-    loader = DataLoader(dataset, batch_size = batch_size, num_workers = num_workers,
+    loader = DataLoader(dataset, batch_size = batch_size, 
+                        num_workers = num_workers,
                         shuffle=shuffle,
-                       pin_memory=pin_memory, collate_fn = MyCollate(pad_idx=pad_idx)) #MyCollate class runs __call__ method by default
+                        pin_memory=pin_memory, 
+                        collate_fn = MyCollateFn(pad_idx)) #MyCollate class runs __call__ method by default
     return loader
 
-def load_vocabulary():
-    filename_vocabulary = Path(DATASET_DIR, "vocab.json")
-    vocabulary = json.load(open(filename_vocabulary, 'r'))
+def get_dataset(data_dir, eval_split, batch_size, pad_idx):
+    train_data = CustomDataset(data_dir)
+    val_data = CustomDataset(data_dir, eval_split)
+    train_loader = get_dataset_loader(train_data, batch_size, pad_idx)
+    val_loader = get_dataset_loader(val_data, batch_size, pad_idx)
+    return train_data.num_pairs, train_loader, val_loader
+
+def load_vocabulary(vocab_file):
+    vocabulary = json.load(open(vocab_file, 'r'))
     return vocabulary
 
 if __name__ == "__main__":
