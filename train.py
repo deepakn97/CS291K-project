@@ -17,13 +17,13 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, steps_per_epoch, n_epochs, model_output_dir):
+def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, steps_per_epoch, n_epochs, pad_idx, model_output_dir):
   # set current cuda device to first gpu in devices
   torch.cuda.set_device(devices[0])
 
   model.cuda()
 
-  criterion = LabelSmoothing(vocab_size, vocab_size-1, smoothing=0.0, )
+  criterion = LabelSmoothing(vocab_size, pad_idx, smoothing=0.0)
   criterion.cuda()
 
 
@@ -34,7 +34,7 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
   )
   lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
       optimizer=optimizer,
-      lr_lambda=lambda step: rate(step, embedding_dim, factor=1.0, warmup=10)
+      lr_lambda=lambda step: rate(step, embedding_dim, factor=1.0, warmup=4000)
   )
 
   learning_rates = []
@@ -47,26 +47,30 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
       model_par,
       MultiGPULossCompute(model.generator, criterion, devices=devices, opt=optimizer, scheduler=lr_scheduler),
       steps_per_epoch,
-      epoch
+      epoch,
+      pad_idx=pad_idx,
+      model_output_dir=model_output_dir
     )
     model_par.eval()
     eval_loss = run_epoch(
       val_loader,
       model_par, 
       MultiGPULossCompute(model.generator, criterion, devices=devices, opt=None),
+      steps_per_epoch,
+      epoch,
+      pad_idx=pad_idx,
+      model_output_dir=model_output_dir
     )
 
     learning_rates.append(optimizer.param_groups[0]['lr'])
     train_losses.append(train_loss)
     eval_losses.append(eval_loss)
 
-    if epoch % 10 == 0:
-      torch.save(model_par, os.path.join(model_output_dir,'model.pt'))
     print(f"Epoch: {epoch}/{n_epochs} | Eval Loss: {eval_loss}")
     
   return learning_rates, train_losses, eval_losses
   
-def run_epoch(data_iter, model, loss_compute, steps_per_epoch=0, num_epoch=0, pad_idx=-100):
+def run_epoch(data_iter, model, loss_compute, steps_per_epoch, num_epoch, pad_idx, model_output_dir):
   "Standard Training and Logging Function"
   start = time.time()
   total_tokens = 0
@@ -86,12 +90,14 @@ def run_epoch(data_iter, model, loss_compute, steps_per_epoch=0, num_epoch=0, pa
       tokens += batch.ntokens
       if loss_compute.opt is not None:
         print_freq = steps_per_epoch // 5
-        if i % 10 == 0:
+        if i % 50 == 0:
             elapsed = time.time() - start
-            print("Step: %6d Loss: %6.2f Tokens per Sec: %7.1f Time per batch: %7.1f Learning Rate: %6.1e" %
-                    (steps_per_epoch * (num_epoch) + i, loss / batch.ntokens, tokens / elapsed, elapsed, loss_compute.opt.param_groups[0]['lr']))
+            print("Step: %6d/%d Loss: %6.2f Tokens per Sec: %7.1f Time per batch: %7.1f Learning Rate: %6.1e" %
+                    (steps_per_epoch * (num_epoch) + i, steps_per_epoch, loss / batch.ntokens, tokens / elapsed, elapsed, loss_compute.opt.param_groups[0]['lr']))
             start = time.time()
             tokens = 0
+      if ( steps_per_epoch * (num_epoch) + i ) % 1000 == 0:
+        torch.save(model, os.path.join(model_output_dir,'model.pt'))
   
   return total_loss / total_tokens
 
@@ -123,9 +129,11 @@ def main():
   data_dir = os.path.join(datasets_dir, args.dataset)
   logger.info(f'Config loaded from {args.config}')
 
-  # first make sure all the output directory exists, if not create it
-  if not os.path.exists(MODEL_STORE_PATH):
-    os.makedirs(MODEL_STORE_PATH)
+  # first make sure all the output directory exists, if not create it and save config file
+  if not os.path.exists(model_output_dir):
+    os.makedirs(model_output_dir)
+  with open(os.path.join(model_output_dir, 'config.json'), 'w') as f:
+    json.dump(config, f)
 
   logger.info(f'Loading Vocabulary...')
   tokenizer = GPT2Tokenizer.from_pretrained('./models/tokenizer')
@@ -152,12 +160,10 @@ def main():
     hidden_size=ffn_hidden_dim
     )
   # call train model
-  learning_rates, train_losses, eval_losses = train(model, train_loader, val_loader, vocab_size + special_tokens, embed_dim, devices, steps_per_epoch, n_epochs, model_output_dir)
+  learning_rates, train_losses, eval_losses = train(model, train_loader, val_loader, vocab_size + special_tokens, embed_dim, devices, steps_per_epoch, n_epochs, pad_idx, model_output_dir)
 
-  # Saving config file, learning, train and eval losses for further use
-  logger.info(f'Saving config and losses...')
-  with open(os.path.join(data_dir, 'config.json'), 'w') as f:
-    json.dump(config, f)
+  # Saving learning, train and eval losses for further use
+  logger.info(f'Saving losses...')
   with open(os.path.join(data_dir, 'learning_rates.json'), 'w') as f:
     json.dump(learning_rates, f)
   with open(os.path.join(data_dir, 'train_losses.json'), 'w') as f:

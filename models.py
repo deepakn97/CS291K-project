@@ -44,6 +44,7 @@ class Transformer(nn.Module):
     embedded_inp = self.word_embedding(source)
     enc_out = self.encoder(embedded_inp, source_mask)
     target = torch.ones(source.shape[0],1).fill_(bos_token).type_as(source.data)
+    target = torch.ones(source.shape[0],1).fill_(bos_token).type_as(source.data)
     target_mask = create_mask(target.shape[1]).type_as(target.data)
 
     #TODO(deepakn97): check for <eos> token and end early

@@ -1,8 +1,8 @@
 {
   "DATASETS_DIR": "./datasets/", 
   "MODELS_DIR": "./models/",
-  "NUM_EPOCHS": 2,
-  "BATCH_SIZE": 128,
+  "NUM_EPOCHS": 100,
+  "BATCH_SIZE": 512,
   "LEARNING_RATE": 0.0001,
   "NUM_ENCODER_LAYER": 2,
   "NUM_DECODER_LAYER": 2,

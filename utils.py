@@ -34,7 +34,8 @@ def data_gen(V, batch, nbatches):
       data[:, 0] = 1
       src = torch.autograd.Variable(data, requires_grad=False)
       tgt = torch.autograd.Variable(data, requires_grad=False)
-      yield Batch(src, tgt, 0)
+      yield (src, tgt)
+
 
 def loss(x, criterion):
   d = x + 3 * 1

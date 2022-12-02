@@ -193,7 +193,7 @@ class Embedding(nn.Module):
 
 
 class PositionalEmbedding(nn.Module):
-  def __init__(self, embed_dim, max_len=5000):
+  def __init__(self, embed_dim, max_len=1200):
       """
       Introduces information to the moodel about the relative or 
       absolute position of the tokens in the sequence

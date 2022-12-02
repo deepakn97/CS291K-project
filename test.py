@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm
 import numpy as np
 from utils import create_mask, LabelSmoothing, rate, data_gen
-from utils import SimpleLossCompute, DummyScheduler, DummyOptimizer
+from utils import SimpleLossCompute, DummyScheduler, DummyOptimizer, MultiGPULossCompute
 from train import run_epoch
 from models import Transformer
 
@@ -15,14 +15,14 @@ seq_length = 10
 
 source = torch.LongTensor([[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]])
 source_mask = torch.ones(1, 1, 10)
-target = torch.zeros(1, 1).type_as(source)
+target = torch.ones(1, 1).type_as(source)
 target_mask = create_mask(target.size(1)).type_as(source.data)
 
 print(f"Shape of source vector: {source.shape} \n \
     Shape of output vector: {target.shape}")
 
 model = Transformer(embed_dim=512, src_vocab_size=source_vocab_size, 
-                    trg_vocab_size=target_vocab_size, seq_length=seq_length,
+                    trg_vocab_size=target_vocab_size,
                     num_layers_enc=num_layers, num_layers_dec=num_layers,
                     hidden_size=2048, n_head=8, enc_dropout=0.2, dec_dropout=0.2)
 print("Model loaded")
@@ -30,9 +30,10 @@ print("Model loaded")
 
 # %%
 # inference test
-source = torch.tensor([[0, 2, 5, 6, 4, 3, 9, 5, 2, 1]])
-target = torch.tensor([[0]])
-out = model.generate_greedy(source, source_mask, max_len, bos_token)
+source = torch.tensor([[1, 2, 5, 6, 4, 3, 9, 5, 2, 1]])
+target = torch.tensor([[1]])
+pad_idx = 0
+out = model.generate_greedy(source, source_mask, seq_length, bos_token=1)
 print(out)
 # %%
 
@@ -53,19 +54,19 @@ def example_simple_model(model, embed_dim):
         run_epoch(
             data_gen(vocab, batch_size, 20),
             model,
-            SimpleLossCompute(criterion),
-            optimizer,
-            lr_scheduler,
-            mode='train'
+            steps_per_epoch=100,
+            num_epoch=epoch,
+            pad_idx=0,
+            model_output_dir = './models/test'
         )
         model.eval()
         run_epoch(
             data_gen(vocab, batch_size, 5),
             model,
-            SimpleLossCompute(criterion),
-            DummyOptimizer(),
-            DummyScheduler(),
-            mode='eval'
+            steps_per_epoch=100,
+            num_epoch=epoch,
+            pad_idx=0,
+            model_output_dir = './models/test'
         )
     
     model.eval()
