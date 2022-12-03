@@ -25,6 +25,7 @@ class MultiHeadAttention(nn.Module):
     self.n_head = n_head
     self.embed_dim_single_head = (self.embed_dim // self.n_head)
     assert self.n_head * self.embed_dim_single_head == self.embed_dim, "embed_dim must be divisible by n_head"
+    self.attention = None
 
     # Initialize query, key, value and out matrices 
     self.W_q = nn.Linear(self.embed_dim_single_head, self.embed_dim_single_head, bias=False)
@@ -76,10 +77,10 @@ class MultiHeadAttention(nn.Module):
       product = product.masked_fill(mask == 0, -1e10)
 
     # scaling by 1/sqrt(dk) to improve gradient propogation
-    product = product / math.sqrt(self.embed_dim_single_head)
+    self.attention = product / math.sqrt(self.embed_dim_single_head)
 
     # apply softmax
-    scores = F.softmax(product, dim=-1) 
+    scores = F.softmax(self.attention, dim=-1) 
 
     # multiply with value matrix
     scores = torch.matmul(scores, V) # (batch_size, n_head, seq_length, embed_per_head)
@@ -243,7 +244,7 @@ class DecoderBlock(nn.Module):
     :param  dropout:      drouput value
     """
     
-    self.attention = MultiHeadAttention(embed_dim, n_head=n_head)
+    self.masked_attention = MultiHeadAttention(embed_dim, n_head=n_head)
     self.norm = nn.LayerNorm(embed_dim)
     self.dropout = nn.Dropout(dropout)
     self.transformer_block = TransformerBlock(embed_dim, hidden_size, n_head, dropout)
@@ -256,8 +257,8 @@ class DecoderBlock(nn.Module):
     :param  mask:   mask for multi-head attention
     :return:        block transformer output
     """
-    attention = self.attention(query, query, query, mask=target_mask) #32x10x512
-    query = self.dropout(self.norm(attention + query))
+    masked_attention = self.masked_attention(query, query, query, mask=target_mask) #32x10x512
+    query = self.dropout(self.norm(masked_attention + query))
     # print('Key shape in DecoderBlock: ', key.shape)
     # print('Query shape in DecoderBlock: ', query.shape)
     # print('Value shape in DecoderBlock: ', value.shape)
