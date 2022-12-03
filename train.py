@@ -48,6 +48,7 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
       MultiGPULossCompute(model.generator, criterion, devices=devices, opt=optimizer, scheduler=lr_scheduler),
       steps_per_epoch,
       epoch,
+      n_epochs,
       pad_idx=pad_idx,
       model_output_dir=model_output_dir
     )
@@ -58,6 +59,7 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
       MultiGPULossCompute(model.generator, criterion, devices=devices, opt=None),
       steps_per_epoch,
       epoch,
+      n_epochs,
       pad_idx=pad_idx,
       model_output_dir=model_output_dir
     )
@@ -70,7 +72,7 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
     
   return learning_rates, train_losses, eval_losses
   
-def run_epoch(data_iter, model, loss_compute, steps_per_epoch, num_epoch, pad_idx, model_output_dir):
+def run_epoch(data_iter, model, loss_compute, steps_per_epoch, epoch, num_epochs, pad_idx, model_output_dir):
   "Standard Training and Logging Function"
   start = time.time()
   total_tokens = 0
@@ -93,10 +95,10 @@ def run_epoch(data_iter, model, loss_compute, steps_per_epoch, num_epoch, pad_id
         if i % 50 == 0:
             elapsed = time.time() - start
             print("Step: %6d/%d Loss: %6.2f Tokens per Sec: %7.1f Time per batch: %7.1f Learning Rate: %6.1e" %
-                    (steps_per_epoch * (num_epoch) + i, steps_per_epoch, loss / batch.ntokens, tokens / elapsed, elapsed, loss_compute.opt.param_groups[0]['lr']))
+                    (steps_per_epoch * (epoch) + i, steps_per_epoch * num_epochs, loss / batch.ntokens, tokens / elapsed, elapsed, loss_compute.opt.param_groups[0]['lr']))
             start = time.time()
             tokens = 0
-      if ( steps_per_epoch * (num_epoch) + i ) % 1000 == 0:
+      if ( steps_per_epoch * (epoch) + i ) % 1000 == 0:
         torch.save(model, os.path.join(model_output_dir,'model.pt'))
   
   return total_loss / total_tokens
