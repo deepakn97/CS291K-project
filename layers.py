@@ -80,10 +80,10 @@ class MultiHeadAttention(nn.Module):
     self.attention = product / math.sqrt(self.embed_dim_single_head)
 
     # apply softmax
-    scores = F.softmax(self.attention, dim=-1) 
+    self.attention = F.softmax(self.attention, dim=-1) 
 
     # multiply with value matrix
-    scores = torch.matmul(scores, V) # (batch_size, n_head, seq_length, embed_per_head)
+    scores = torch.matmul(self.attention, V) # (batch_size, n_head, seq_length, embed_per_head)
 
     # concatenate outputs
     concat = scores.transpose(1, 2).contiguous().view(batch_size, query_seq_length, self.embed_dim)

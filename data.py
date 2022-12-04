@@ -49,7 +49,7 @@ def process_dataset(dataset_name="wmt14", dataset_languages="fr-en"):
         for sentence in tqdm(dataset[split]):
             sentence =  sentence["translation"]
 
-            source_sentence = "<|bos|>" + sentence[languages[1]] + "<|eos|>"
+            source_sentence = sentence[languages[1]]
             target_sentence = "<|bos|>" + sentence[languages[0]] + "<|eos|>"
 
             # source_sentence_tokenized = tokenizer.tokenize(source_sentence)
@@ -133,7 +133,8 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         source_sentence = linecache.getline(self.source_filename, idx+1)
-        source_sentence = [int(x) for x in source_sentence.split(' ')[:-1]]
+        # ignore the bos and eos token in source sentence
+        source_sentence = [int(x) for x in source_sentence.split(' ')[1:-2]]
         target_sentence = linecache.getline(self.target_filename, idx+1)
         target_sentence = [int(x) for x in target_sentence.split(' ')[:-1]]
         return torch.as_tensor(source_sentence, dtype=torch.long), torch.as_tensor(target_sentence, dtype=torch.long)

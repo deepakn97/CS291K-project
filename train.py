@@ -37,9 +37,6 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
       lr_lambda=lambda step: rate(step, embedding_dim, factor=1.0, warmup=4000)
   )
 
-  learning_rates = []
-  train_losses = []
-  eval_losses = []
   for epoch in range(n_epochs):
     model_par.train()
     train_loss = run_epoch(
@@ -64,13 +61,10 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
       model_output_dir=model_output_dir
     )
 
-    learning_rates.append(optimizer.param_groups[0]['lr'])
-    train_losses.append(train_loss)
-    eval_losses.append(eval_loss)
-
     print(f"Epoch: {epoch}/{n_epochs} | Eval Loss: {eval_loss}")
-    
-  return learning_rates, train_losses, eval_losses
+    with open(os.path.join(model_output_dir, 'eval_losses.json'), 'w') as f:
+      f.write(eval_loss)
+      f.write('\n')
   
 def run_epoch(data_iter, model, loss_compute, steps_per_epoch, epoch, num_epochs, pad_idx, model_output_dir):
   "Standard Training and Logging Function"
@@ -98,6 +92,13 @@ def run_epoch(data_iter, model, loss_compute, steps_per_epoch, epoch, num_epochs
                     (steps_per_epoch * (epoch) + i, steps_per_epoch * num_epochs, loss / batch.ntokens, tokens / elapsed, elapsed, loss_compute.opt.param_groups[0]['lr']))
             start = time.time()
             tokens = 0
+
+            with open(os.path.join(model_output_dir, 'learning_rates.json'), 'w') as f:
+              f.write(loss_compute.opt.param_groups[0]["lr"])
+              f.write('\n')
+            with open(os.path.join(model_output_dir, 'train_losses.json'), 'w') as f:
+              f.write(loss / batch.ntokens)
+              f.write('\n')
       if ( steps_per_epoch * (epoch) + i ) % 1000 == 0:
         torch.save(model, os.path.join(model_output_dir,'model.pt'))
   
@@ -118,11 +119,11 @@ def main():
 
   # get all these params from the config file
   batch_size = config.get('BATCH_SIZE', 64)
-  embed_dim = config.get('EMBED_DIM', 256)
+  embed_dim = config.get('EMBEDDING_DIM', 256)
   n_epochs = config.get('NUM_EPOCHS', 10)
   devices = config.get('DEVICES', [0, 1, 2, 3])
-  num_encoder_layers = config.get('NUM_ENCODER_LAYERS', 2)
-  num_decoder_layers = config.get('NUM_DECODER_LAYERS', 2)
+  num_encoder_layers = config.get('NUM_ENCODER_LAYER', 2)
+  num_decoder_layers = config.get('NUM_DECODER_LAYER', 2)
   n_heads = config.get('NUM_ATTENTION_HEADS', 4)
   ffn_hidden_dim = config.get('FFN_HIDDEN_DIM', 512)
   datasets_dir = config.get('DATASET_DIR', './datasets/')
@@ -162,16 +163,7 @@ def main():
     hidden_size=ffn_hidden_dim
     )
   # call train model
-  learning_rates, train_losses, eval_losses = train(model, train_loader, val_loader, vocab_size + special_tokens, embed_dim, devices, steps_per_epoch, n_epochs, pad_idx, model_output_dir)
-
-  # Saving learning, train and eval losses for further use
-  logger.info(f'Saving losses...')
-  with open(os.path.join(data_dir, 'learning_rates.json'), 'w') as f:
-    json.dump(learning_rates, f)
-  with open(os.path.join(data_dir, 'train_losses.json'), 'w') as f:
-    json.dump(train_losses, f)
-  with open(os.path.join(data_dir, 'eval_losses.json'), 'w') as f:
-    json.dump(eval_losses, f)
+  train(model, train_loader, val_loader, vocab_size + special_tokens, embed_dim, devices, steps_per_epoch, n_epochs, pad_idx, model_output_dir)
 
 if __name__ == "__main__":
   main()
