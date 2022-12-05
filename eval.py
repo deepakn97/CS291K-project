@@ -4,10 +4,8 @@ import numpy as np
 from transformers import GPT2Tokenizer
 from nltk.translate.bleu_score import sentence_bleu
 
-from constants import *
-
-PREDICTIONS_DIR = "./predictions/"
-RESULTS_DIR = "./results/"
+DATASET_DIR = './datasets/wmt14_en_fr/'
+MODEL_DIR = './models/wmt14_en_fr_Dec_02_2022_0026'
 
 def bleu_scoring(predictions, targets):
     bleu_scores = []
@@ -20,7 +18,7 @@ def bleu_scoring(predictions, targets):
 
 def read_dataset(filename):
     # Open source
-    with open(Path(DATASET_DIR, filename), 'r') as f:
+    with open(filename, 'r') as f:
         dataset = []
         for sentence in f:
             dataset.append([int(x) for x in sentence.split(' ')[:-1]])
@@ -32,8 +30,8 @@ def main():
     tokenizer = GPT2Tokenizer.from_pretrained('./models/tokenizer')
 
     # Open target
-    target_test_filename = "wmt14_fr_test.trg"
-    target_test_dataset = read_dataset(target_test_filename)
+    target_test_filename = "test.trg"
+    target_test_dataset = read_dataset(Path(DATASET_DIR, target_test_filename))
     targets = []
     for sentence in target_test_dataset:
         sentence = [token for token in sentence if (token != tokenizer.bos_token_id and token != tokenizer.eos_token_id)]
@@ -41,8 +39,8 @@ def main():
         targets.append(sentence.split(" "))
 
     # Open predictions
-    predictions_file = "wmt14_en_fr_llm.txt"
-    with open(Path(PREDICTIONS_DIR, predictions_file), 'r') as f:
+    predictions_file = Path(MODEL_DIR, 'predictions.txt')
+    with open(predictions_file, 'r') as f:
         predictions = []
         for sentence in f:
             tokenized_sentece = [x for x in sentence.split(' ')[:-1]]
@@ -60,7 +58,7 @@ def main():
     print(f"BLEU score std: {bleu_std}")
 
     # Store results
-    with open(Path(RESULTS_DIR, 'llm_results.txt'), 'w') as f:
+    with open(Path(MODEL_DIR, 'results.txt'), 'w') as f:
         f.write(f"BLEU Mean: {bleu_mean}\n")
         f.write(f"BLEU Std: {bleu_std}\n")
 

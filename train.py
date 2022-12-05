@@ -17,7 +17,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, steps_per_epoch, n_epochs, pad_idx, model_output_dir):
+def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, steps_per_epoch, n_epochs, pad_idx, lr, model_output_dir):
   # set current cuda device to first gpu in devices
   torch.cuda.set_device(devices[0])
 
@@ -30,7 +30,7 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
   model_par = nn.DataParallel(model, device_ids=devices)
 
   optimizer = torch.optim.Adam(
-      model.parameters(), lr=0.5, betas=(0.9, 0.98), eps = 1e-9
+      model.parameters(), lr=lr, betas=(0.9, 0.98), eps = 1e-9
   )
   lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
       optimizer=optimizer,
@@ -62,8 +62,8 @@ def train(model, train_loader, val_loader, vocab_size, embedding_dim, devices, s
     )
 
     print(f"Epoch: {epoch}/{n_epochs} | Eval Loss: {eval_loss}")
-    with open(os.path.join(model_output_dir, 'eval_losses.json'), 'w') as f:
-      f.write(eval_loss)
+    with open(os.path.join(model_output_dir, 'eval_losses.txt'), 'a') as f:
+      f.write(str(eval_loss))
       f.write('\n')
   
 def run_epoch(data_iter, model, loss_compute, steps_per_epoch, epoch, num_epochs, pad_idx, model_output_dir):
@@ -93,11 +93,12 @@ def run_epoch(data_iter, model, loss_compute, steps_per_epoch, epoch, num_epochs
             start = time.time()
             tokens = 0
 
-            with open(os.path.join(model_output_dir, 'learning_rates.json'), 'w') as f:
-              f.write(loss_compute.opt.param_groups[0]["lr"])
+            with open(os.path.join(model_output_dir, 'learning_rates.txt'), 'a') as f:
+              f.write(str(loss_compute.opt.param_groups[0]["lr"]))
               f.write('\n')
-            with open(os.path.join(model_output_dir, 'train_losses.json'), 'w') as f:
-              f.write(loss / batch.ntokens)
+            with open(os.path.join(model_output_dir, 'train_losses.txt'), 'a') as f:
+              loss_ = (loss/batch.ntokens).data
+              f.write(str((loss / batch.ntokens).item()))
               f.write('\n')
       if ( steps_per_epoch * (epoch) + i ) % 1000 == 0:
         torch.save(model, os.path.join(model_output_dir,'model.pt'))
@@ -122,6 +123,7 @@ def main():
   embed_dim = config.get('EMBEDDING_DIM', 256)
   n_epochs = config.get('NUM_EPOCHS', 10)
   devices = config.get('DEVICES', [0, 1, 2, 3])
+  lr = config.get('LEARNING_RATE', 0.5)
   num_encoder_layers = config.get('NUM_ENCODER_LAYER', 2)
   num_decoder_layers = config.get('NUM_DECODER_LAYER', 2)
   n_heads = config.get('NUM_ATTENTION_HEADS', 4)
@@ -131,6 +133,7 @@ def main():
   model_output_dir = os.path.join(config.get('MODELS_DIR', './models'), f'{args.dataset}_{timestamp}')
   data_dir = os.path.join(datasets_dir, args.dataset)
   logger.info(f'Config loaded from {args.config}')
+  print(f'Batch Size: {batch_size}\nEmbedding Dim: {embed_dim}\nNumber of Epochs: {n_epochs}\nLearning Rate: {lr}\nEncoder Layers: {num_encoder_layers}\nDecoder Layers: {num_decoder_layers}\nAttention Heads: {n_heads}\nFFN Hidden Size: {ffn_hidden_dim}')
 
   # first make sure all the output directory exists, if not create it and save config file
   if not os.path.exists(model_output_dir):
@@ -163,7 +166,7 @@ def main():
     hidden_size=ffn_hidden_dim
     )
   # call train model
-  train(model, train_loader, val_loader, vocab_size + special_tokens, embed_dim, devices, steps_per_epoch, n_epochs, pad_idx, model_output_dir)
+  train(model, train_loader, val_loader, vocab_size + special_tokens, embed_dim, devices, steps_per_epoch, n_epochs, pad_idx, lr, model_output_dir)
 
 if __name__ == "__main__":
   main()
