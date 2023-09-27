@@ -4,7 +4,9 @@ Note: This file has a dependency on the layers.py file.
 '''
 
 from layers import *
+import numpy as np
 from utils import create_mask
+from torch.nn import functional as F
 
 class Transformer(nn.Module):
   def __init__(self, embed_dim, src_vocab_size, trg_vocab_size, num_layers_enc=2, num_layers_dec=2, hidden_size=512, n_head=4, enc_dropout=0.2, dec_dropout=0.2):
@@ -33,8 +35,29 @@ class Transformer(nn.Module):
       if p.dim() > 1:
         nn.init.xavier_uniform_(p)
 
+  def sample(self, prob, top_k=40, top_p=1.0):
+    if top_p > 0.0:
+      sorted_probs, sorted_indices = torch.sort(prob, descending=True)
+      cumulative_probs = torch.cumsum(sorted_probs, dim=-1)
+      # Remove topkens with cumulative probability above the threshold
+      sorted_indices_to_remove = cumulative_probs > top_p
+      # Keep the first token above the threshold
+      sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+      sorted_indices_to_remove[..., 0] = 0
+
+      indices_to_remove = sorted_indices[sorted_indices_to_remove]
+      prob[indices_to_remove] = -float('Inf')
+
+    if top_k > 0:
+      indices_to_remove = prob < torch.topk(prob, top_k)[0][..., -1, None]
+      prob[indices_to_remove] = -float('Inf')
+    
+    prob = F.softmax(prob, dim=-1)
+    
+    return torch.multinomial(prob, 1)
+
   # TODO(deepakn97): Modify the function to create target and target_mask
-  def generate_greedy(self, source, source_mask, max_seq_length, bos_token, eos_token):
+  def generate(self, source, source_mask, max_seq_length, bos_token, eos_token, top_p=1.0, top_k=0, temperature = 1.0, strategy="greedy"):
     """
     :param source: input of encoder
     :param target: input of decoder
@@ -53,7 +76,15 @@ class Transformer(nn.Module):
       embedded_target = self.word_embedding(target)
       out = self.decoder(embedded_target, enc_out, source_mask, target_mask) # batch_size x seq_length x vocab_size
       prob = self.generator(out[:, -1]) # batch_size x vocab_size
-      _, next_word = torch.max(prob, dim=1)
+
+      # Sample according to strategy
+      if strategy == "greedy":
+        _, next_word = torch.max(prob, dim=1)
+      else:
+        if temperature == 0.0:
+          raise ValueError("Temperature cannot be zero in temperature sampling. If you do not want to use temperature sampling, set temperature to 1.0.")
+        next_word = self.sample(prob[0] / temperature, top_k, top_p)
+
       next_word = next_word.data[0] # 1
       if next_word == eos_token:
         break

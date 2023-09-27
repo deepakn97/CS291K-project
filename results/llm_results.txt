@@ -1,2 +1,0 @@
-BLEU Mean: 1.0
-BLEU Std: 0.0
